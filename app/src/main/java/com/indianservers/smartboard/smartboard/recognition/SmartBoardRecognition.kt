@@ -224,7 +224,7 @@ object MathRecognitionClassifier {
         source.contains('=') -> MathExpressionType.EQUATION
         source.startsWith("[") || source.startsWith("\\begin{matrix}") -> MathExpressionType.MATRIX
         Regex("\\([^)]+,[^)]+\\)").matches(source) -> MathExpressionType.COORDINATE
-        Regex("\\b(sin|cos|tan|log|ln)\\b").containsMatchIn(source) -> MathExpressionType.FUNCTION
+        Regex("\\b(sin|cos|tan|log|ln)\\b", RegexOption.IGNORE_CASE).containsMatchIn(source) -> MathExpressionType.FUNCTION
         source.any(Char::isLetter) -> MathExpressionType.ALGEBRAIC_EXPRESSION
         source.any { it in "+-*/^√" } -> MathExpressionType.ARITHMETIC
         else -> MathExpressionType.UNKNOWN

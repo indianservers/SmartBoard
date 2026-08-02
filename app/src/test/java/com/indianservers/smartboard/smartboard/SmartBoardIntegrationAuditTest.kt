@@ -98,6 +98,10 @@ class SmartBoardIntegrationAuditTest {
             SmartBoardGraphKind.SURFACE_3D,
             SmartBoardGraphAdapter.prepare("z=x^2+y^2", threeDimensional = true).getOrThrow().kind,
         )
+        assertEquals(
+            "sin(45)",
+            SmartBoardGraphAdapter.prepare("Sin(45)").getOrThrow().expression.lowercase(),
+        )
         assertTrue(SmartBoardGraphAdapter.prepare("sin(").isFailure)
         assertTrue(SmartBoardGraphAdapter.prepare("sqrt(-1)", threeDimensional = true).isFailure)
     }

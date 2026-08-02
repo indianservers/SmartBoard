@@ -45,6 +45,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -95,12 +96,14 @@ import com.indianservers.smartboard.smartboard.models.SmartBoardBackground
 import com.indianservers.smartboard.smartboard.models.SmartBoardElement
 import com.indianservers.smartboard.smartboard.models.SmartBoardInputMode
 import com.indianservers.smartboard.smartboard.models.SmartBoardRecognitionMode
+import com.indianservers.smartboard.smartboard.models.SmartBoardRecognitionTarget
 import com.indianservers.smartboard.smartboard.models.RecognitionQualityTier
 import com.indianservers.smartboard.smartboard.models.SmartBoardShapeType
 import com.indianservers.smartboard.smartboard.tools.SemanticToolOperation
 import com.indianservers.smartboard.smartboard.tools.SmartBoardEditableReconstructionEngine
 import com.indianservers.smartboard.smartboard.tools.SmartBoardReconstructionKind
 import com.indianservers.smartboard.smartboard.models.SmartBoardSubject
+import com.indianservers.smartboard.smartboard.models.SmartBoardClassroomSubjects
 import com.indianservers.smartboard.smartboard.models.SmartBoardIntelligenceMode
 import com.indianservers.smartboard.smartboard.intelligence.SmartBoardRecommendation
 import com.indianservers.smartboard.smartboard.intelligence.WorkflowStepStatus
@@ -161,6 +164,12 @@ fun SmartBoardFeatureRoot(
     DisposableEffect(Unit) {
         onDispose { vm.save() }
     }
+    LaunchedEffect(vm.pendingGraphLaunch) {
+        vm.pendingGraphLaunch?.let { launch ->
+            if (launch.route == "graph3d") onOpenGraph3D(launch.expression) else onOpenGraph2D(launch.expression)
+            vm.consumePendingGraphLaunch()
+        }
+    }
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
@@ -197,7 +206,7 @@ fun SmartBoardFeatureRoot(
         Column(Modifier.fillMaxSize()) {
             SmartBoardTopBar(
                 title = vm.document.title,
-                subject = vm.document.subject,
+                subject = vm.document.subjectMode.selection,
                 onTitle = vm::rename,
                 onExit = {
                     vm.save()
@@ -575,10 +584,34 @@ fun SmartBoardFeatureRoot(
                 SettingSwitch("Reduced motion", vm.preferences.reducedMotion) {
                     vm.updatePreferences(vm.preferences.copy(reducedMotion = it))
                 }
-                Text("Mathematics board", color = BoardInk, fontWeight = FontWeight.Bold)
+                Text("Classroom subject", color = BoardInk, fontWeight = FontWeight.Bold)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    SmartBoardClassroomSubjects.selectable.forEach { subject ->
+                        BoardButton(
+                            if (vm.document.subjectMode.selection == subject) "✓ ${subject.displayName()}" else subject.displayName(),
+                            onClick = { vm.setBoardSubject(subject) },
+                        )
+                    }
+                }
+                SettingSwitch("Lock subject for this board", vm.document.subjectMode.locked, vm::setSubjectLock)
                 Text(
-                    "Recognition, tutoring and workspace actions are focused on mathematics.",
+                    "Auto Detect routes each selection locally. A subject lock gives formulas, diagrams and terminology the chosen classroom context.",
                     color = BoardMuted,
+                )
+                Text("Recognition result", color = BoardInk, fontWeight = FontWeight.Bold)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    BoardButton(
+                        if (vm.recognitionTarget == SmartBoardRecognitionTarget.CONTENT) "✓ Subject content" else "Subject content",
+                    ) { vm.updateRecognitionTarget(SmartBoardRecognitionTarget.CONTENT) }
+                    BoardButton(
+                        if (vm.recognitionTarget == SmartBoardRecognitionTarget.GRAPH_2D) "✓ Graph mode" else "Graph mode",
+                        enabled = vm.document.subjectMode.selection in setOf(SmartBoardSubject.AUTO, SmartBoardSubject.MATHEMATICS),
+                    ) { vm.updateRecognitionTarget(SmartBoardRecognitionTarget.GRAPH_2D) }
+                }
+                Text(
+                    "Graph mode recognizes mathematical handwriting, keeps its source ink, creates an editable graph object and opens the graph immediately.",
+                    color = BoardCyan,
+                    fontSize = 10.sp,
                 )
                 Text("Recognition mode", color = BoardInk, fontWeight = FontWeight.Bold)
                 SmartBoardRecognitionMode.entries.forEach { mode ->
@@ -588,7 +621,7 @@ fun SmartBoardFeatureRoot(
                 }
                 if (vm.preferences.recognitionMode == SmartBoardRecognitionMode.AUTOMATIC) {
                     Text(
-                        "Live Mathematics mode fuses digital ink, a rendered image pass and shared-parser evidence. Suggestions never replace ink automatically.",
+                        "Live classroom mode fuses digital ink, a rendered image pass and subject evidence. Suggestions never replace ink automatically.",
                         color = BoardCyan,
                         fontSize = 10.sp,
                     )
@@ -757,7 +790,12 @@ private fun SmartBoardTopBar(
         Box {
             BoardButton("More", onClick = onMore)
             DropdownMenu(expanded = moreOpen, onDismissRequest = onDismissMore) {
-                DropdownMenuItem(text = { Text("New Maths Board") }, onClick = { onNew(SmartBoardSubject.MATHEMATICS) })
+                SmartBoardClassroomSubjects.selectable.forEach { subject ->
+                    DropdownMenuItem(
+                        text = { Text("New ${subject.displayName()} Board") },
+                        onClick = { onNew(subject) },
+                    )
+                }
                 DropdownMenuItem(text = { Text("Open saved board") }, onClick = onRecent)
                 DropdownMenuItem(text = { Text("Accessible Elements") }, onClick = onElements)
                 DropdownMenuItem(text = { Text("Input & Display Settings") }, onClick = onSettings)
@@ -866,6 +904,19 @@ private fun SmartBoardToolbar(
         ToolButton("Redo", enabled = vm.canRedo) { vm.redo() }
         ToolButton("Clear", enabled = vm.document.elements.isNotEmpty(), warning = true) { vm.clearBoard() }
         ToolButton(if (vm.recognizing) "Reading…" else "Recognize", enabled = !vm.recognizing) { vm.recognizeSelection() }
+        ToolButton(
+            "Graph AI",
+            selected = vm.recognitionTarget == SmartBoardRecognitionTarget.GRAPH_2D,
+            enabled = vm.document.subjectMode.selection in setOf(SmartBoardSubject.AUTO, SmartBoardSubject.MATHEMATICS),
+        ) {
+            vm.updateRecognitionTarget(
+                if (vm.recognitionTarget == SmartBoardRecognitionTarget.GRAPH_2D) {
+                    SmartBoardRecognitionTarget.CONTENT
+                } else {
+                    SmartBoardRecognitionTarget.GRAPH_2D
+                },
+            )
+        }
         ToolButton("Reset", onClick = vm::resetZoom)
         ToolButton("Grid") {
             val entries = SmartBoardBackground.entries
@@ -1293,15 +1344,23 @@ private fun RecognitionPanel(vm: SmartBoardViewModel, modifier: Modifier) {
             }
             Text("Context only reorders candidates returned by on-device recognizers.", color = BoardMuted, fontSize = 9.sp)
         }
-        review.subjectDetection?.let {
+        review.subjectDetection?.let { detection ->
+            val subject = review.selectedSubject ?: detection.primarySubject
             Text(
-                "Recognition subject: Mathematics",
+                "Recognition subject: ${subject?.displayName() ?: "Needs confirmation"} · ${detection.confidenceLevel.name.lowercase()} confidence",
                 color = BoardCyan,
                 modifier = Modifier.semantics {
                     liveRegion = LiveRegionMode.Polite
-                    contentDescription = "Recognition subject Mathematics."
+                    contentDescription = "Recognition subject ${subject?.displayName() ?: "needs confirmation"}, ${detection.confidenceLevel.name.lowercase()} confidence."
                 },
             )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                SmartBoardClassroomSubjects.academic.forEach { candidate ->
+                    BoardButton(
+                        if (review.selectedSubject == candidate) "✓ ${candidate.displayName()}" else candidate.displayName(),
+                    ) { vm.chooseRecognitionSubject(candidate) }
+                }
+            }
         }
         if (review.result.alternatives.isNotEmpty()) {
             Text("Alternatives", color = BoardInk, fontWeight = FontWeight.Bold)
@@ -1316,7 +1375,7 @@ private fun RecognitionPanel(vm: SmartBoardViewModel, modifier: Modifier) {
         SettingSwitch("Hide source handwriting after insertion", review.hideSourceHandwriting, vm::setHideSourceHandwriting)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             BoardButton(
-                "Insert expression",
+                if (vm.recognitionTarget == SmartBoardRecognitionTarget.GRAPH_2D) "Insert & show graph" else "Insert recognized content",
                 onClick = vm::confirmRecognition,
             )
             BoardButton("Retry", onClick = { vm.recognizeSelection(force = true) })
@@ -1729,9 +1788,11 @@ private fun OverlayPanel(title: String, onDismiss: () -> Unit, content: @Composa
             Modifier
                 .widthIn(min = 300.dp, max = 560.dp)
                 .fillMaxWidth(.9f)
+                .fillMaxHeight(.92f)
                 .background(BoardPanel, RoundedCornerShape(18.dp))
                 .border(1.dp, BoardCyan.copy(.45f), RoundedCornerShape(18.dp))
                 .clickable(enabled = false) {}
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {

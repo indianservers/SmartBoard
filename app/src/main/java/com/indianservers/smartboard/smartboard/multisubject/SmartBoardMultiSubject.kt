@@ -353,6 +353,7 @@ class DefaultSmartBoardRecognitionOrchestrator(
         )
         val manual = request.boardMode.selection.takeIf { it !in setOf(SmartBoardSubject.AUTO, SmartBoardSubject.GENERAL) }
         val routed = when {
+            request.boardMode.locked && manual != null -> manual
             manual != null && detection.confidenceLevel != SubjectConfidenceLevel.HIGH -> manual
             detection.confidenceLevel == SubjectConfidenceLevel.HIGH -> detection.primarySubject
             manual != null -> manual

@@ -68,6 +68,7 @@ class SmartBoardRecognitionTest {
         assertEquals(MathExpressionType.INEQUALITY, MathRecognitionClassifier.detect("x >= 2"))
         assertEquals(MathExpressionType.CALCULUS, MathRecognitionClassifier.detect("\\int x dx"))
         assertEquals(MathExpressionType.MATRIX, MathRecognitionClassifier.detect("[1,2;3,4]"))
+        assertEquals(MathExpressionType.FUNCTION, MathRecognitionClassifier.detect("Sin(45)"))
         assertTrue(SafeLatexPreview.validate("\\frac{1}{2}").isSuccess)
         assertFalse(SafeLatexPreview.validate("\\frac{1{2}").isSuccess)
         assertFalse(SafeLatexPreview.validate("\\input{secret}").isSuccess)

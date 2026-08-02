@@ -2,6 +2,21 @@ package com.indianservers.smartboard.smartboard.models
 
 enum class SmartBoardSubject { AUTO, MATHEMATICS, PHYSICS, CHEMISTRY, ENGLISH, BIOLOGY, GENERAL }
 
+object SmartBoardClassroomSubjects {
+    val selectable: List<SmartBoardSubject> = listOf(
+        SmartBoardSubject.AUTO,
+        SmartBoardSubject.MATHEMATICS,
+        SmartBoardSubject.PHYSICS,
+        SmartBoardSubject.CHEMISTRY,
+        SmartBoardSubject.BIOLOGY,
+    )
+    val academic: Set<SmartBoardSubject> = selectable.filterNot { it == SmartBoardSubject.AUTO }.toSet()
+
+    fun supports(subject: SmartBoardSubject): Boolean = subject in selectable
+}
+
+enum class SmartBoardRecognitionTarget { CONTENT, GRAPH_2D }
+
 enum class SubjectConfidenceLevel { HIGH, MEDIUM, LOW, UNRESOLVED }
 enum class SubjectClassificationSource {
     USER_SELECTION, BOARD_MODE, LOCAL_RULES, RECOGNITION_PROVIDER, AI_CLASSIFIER,

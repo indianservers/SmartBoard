@@ -47,10 +47,12 @@ import com.indianservers.smartboard.smartboard.models.GraphConfigurationElement
 import com.indianservers.smartboard.smartboard.models.ImageElement
 import com.indianservers.smartboard.smartboard.models.SmartBoardResultKind
 import com.indianservers.smartboard.smartboard.models.SmartBoardRecognitionMode
+import com.indianservers.smartboard.smartboard.models.SmartBoardRecognitionTarget
 import com.indianservers.smartboard.smartboard.models.MathRecognitionResult
 import com.indianservers.smartboard.smartboard.models.MathRecognitionAlternative
 import com.indianservers.smartboard.smartboard.models.SmartBoardBackground
 import com.indianservers.smartboard.smartboard.models.SmartBoardBounds
+import com.indianservers.smartboard.smartboard.models.SmartBoardClassroomSubjects
 import com.indianservers.smartboard.smartboard.models.SmartBoardDocument
 import com.indianservers.smartboard.smartboard.models.SmartBoardElement
 import com.indianservers.smartboard.smartboard.models.SmartBoardInputMode
@@ -209,6 +211,8 @@ data class SmartBoardStreamingRecognitionSuggestion(
     val contextEvidenceByCandidate: Map<String, List<RecognitionRerankEvidence>> = emptyMap(),
 )
 
+data class SmartBoardGraphLaunch(val route: String, val expression: String)
+
 class SmartBoardViewModel(
     application: Application,
     private val savedStateHandle: SavedStateHandle,
@@ -229,19 +233,15 @@ class SmartBoardViewModel(
     private val mathematics by lazy { MathematicsSubjectHandler(handwritingProvider) }
     private val physics by lazy { PhysicsSmartBoardSubjectHandler(handwritingProvider) }
     private val chemistry by lazy { Phase1SubjectRecognitionHandler(SmartBoardSubject.CHEMISTRY, handwritingProvider) }
-    private val english by lazy { Phase1SubjectRecognitionHandler(SmartBoardSubject.ENGLISH, handwritingProvider) }
     private val biology by lazy { Phase1SubjectRecognitionHandler(SmartBoardSubject.BIOLOGY, handwritingProvider) }
-    private val general by lazy { Phase1SubjectRecognitionHandler(SmartBoardSubject.GENERAL, handwritingProvider) }
-    private val subjectRegistry by lazy { SmartBoardSubjectRegistry(listOf(mathematics, physics, chemistry, english, biology, general)) }
+    private val subjectRegistry by lazy { SmartBoardSubjectRegistry(listOf(mathematics, physics, chemistry, biology)) }
     private val multiSubjectCapabilities by lazy {
         DefaultSmartBoardSubjectCapabilityRegistry(
             mapOf(
                 SmartBoardSubject.MATHEMATICS to { mathematics },
                 SmartBoardSubject.PHYSICS to { physics },
                 SmartBoardSubject.CHEMISTRY to { chemistry },
-                SmartBoardSubject.ENGLISH to { english },
                 SmartBoardSubject.BIOLOGY to { biology },
-                SmartBoardSubject.GENERAL to { general },
             ),
         )
     }
@@ -321,6 +321,10 @@ class SmartBoardViewModel(
     var recentBoards by mutableStateOf<List<SmartBoardDocument>>(emptyList())
         private set
     var recognitionReview by mutableStateOf<SmartBoardRecognitionReview?>(null)
+        private set
+    var recognitionTarget by mutableStateOf(SmartBoardRecognitionTarget.CONTENT)
+        private set
+    var pendingGraphLaunch by mutableStateOf<SmartBoardGraphLaunch?>(null)
         private set
     var shapeSuggestion by mutableStateOf<AutoShapeSuggestion?>(null)
         private set
@@ -648,7 +652,7 @@ class SmartBoardViewModel(
             }
         }
         if (preferences.recognitionMode == SmartBoardRecognitionMode.AUTOMATIC &&
-            document.subjectMode.selection in setOf(SmartBoardSubject.AUTO, SmartBoardSubject.MATHEMATICS)
+            document.subjectMode.selection == SmartBoardSubject.MATHEMATICS
         ) {
             streamingRecognitionJob = viewModelScope.launch {
                 delay(250)
@@ -685,9 +689,9 @@ class SmartBoardViewModel(
                     if (error !is kotlinx.coroutines.CancellationException) status = "Live recognition unavailable: ${error.message.orEmpty()}"
                 }
             }
-        } else if (preferences.recognitionMode == SmartBoardRecognitionMode.SUGGEST_AFTER_PAUSE) {
+        } else if (preferences.recognitionMode != SmartBoardRecognitionMode.MANUAL_ONLY) {
             automaticRecognitionJob = viewModelScope.launch {
-                delay(1_500)
+                delay(if (preferences.recognitionMode == SmartBoardRecognitionMode.AUTOMATIC) 900 else 1_500)
                 if (correctionGestureSuggestion?.gestureStrokeId == stroke.id) return@launch
                 val current = document.elements.filterIsInstance<StrokeElement>().filterNot(StrokeElement::hidden)
                 val related = SmartBoardStrokeGrouper.recentRelated(current, stroke)
@@ -1214,7 +1218,7 @@ class SmartBoardViewModel(
     }
 
     fun newBoard(subject: SmartBoardSubject = SmartBoardSubject.MATHEMATICS) {
-        require(subject == SmartBoardSubject.AUTO || subject in subjectRegistry.supportedSubjects())
+        require(SmartBoardClassroomSubjects.supports(subject))
         history.clear()
         selectedIds = emptySet()
         recognitionReview = null
@@ -1241,6 +1245,7 @@ class SmartBoardViewModel(
     }
 
     fun setBoardSubject(subject: SmartBoardSubject) {
+        if (!SmartBoardClassroomSubjects.supports(subject)) return
         if (document.subjectMode.selection == subject) return
         val before = document.subjectMode
         val after = before.copy(selection = subject, userSelected = true, lastChangedAt = now())
@@ -1251,8 +1256,30 @@ class SmartBoardViewModel(
             subject,
         )
         recognitionReview = null
+        if (subject !in setOf(SmartBoardSubject.AUTO, SmartBoardSubject.MATHEMATICS)) {
+            recognitionTarget = SmartBoardRecognitionTarget.CONTENT
+        }
         status = "Board mode changed to ${subject.displayName()}; existing content was preserved"
         refreshTutorContext()
+    }
+
+    fun updateRecognitionTarget(target: SmartBoardRecognitionTarget) {
+        if (target == SmartBoardRecognitionTarget.GRAPH_2D &&
+            document.subjectMode.selection !in setOf(SmartBoardSubject.AUTO, SmartBoardSubject.MATHEMATICS)
+        ) {
+            status = "Graph recognition is available in Mathematics or Auto Detect mode"
+            return
+        }
+        recognitionTarget = target
+        status = if (target == SmartBoardRecognitionTarget.GRAPH_2D) {
+            "Graph mode: recognized mathematical expressions will open as editable graphs"
+        } else {
+            "Content mode: recognized writing will become subject-aware board content"
+        }
+    }
+
+    fun consumePendingGraphLaunch() {
+        pendingGraphLaunch = null
     }
 
     fun setSubjectLock(locked: Boolean) {
@@ -1264,7 +1291,7 @@ class SmartBoardViewModel(
     }
 
     fun assignSelectedSubject(subject: SmartBoardSubject) {
-        if (selectedIds.isEmpty() || subject in setOf(SmartBoardSubject.AUTO, SmartBoardSubject.GENERAL)) return
+        if (selectedIds.isEmpty() || subject !in SmartBoardClassroomSubjects.academic) return
         val classification = SmartBoardSubjectClassification(
             subject, emptyList(), 1f, SubjectClassificationSource.USER_SELECTION,
             userConfirmed = true, inheritedFromBoardMode = false, warnings = emptyList(),
@@ -1511,15 +1538,25 @@ class SmartBoardViewModel(
     fun chooseAlternative(value: String) = editRecognitionLatex(value)
 
     fun chooseRecognitionSubject(value: SmartBoardSubject) {
-        if (value in setOf(SmartBoardSubject.AUTO, SmartBoardSubject.GENERAL)) return
+        if (value !in SmartBoardClassroomSubjects.academic) return
         recognitionReview = recognitionReview?.let { review ->
+            val semanticTree = if (value == SmartBoardSubject.MATHEMATICS) {
+                runCatching {
+                    SmartBoardSemanticExpressionBuilder.build(
+                        review.editableLatex,
+                        sourceStrokeIds = review.input.strokeIds,
+                        confidence = review.result.confidence,
+                    )
+                }.getOrNull()
+            } else null
             review.copy(
                 selectedSubject = value,
                 validationMessage = null,
+                semanticTree = semanticTree,
                 specialistInterpretations = SmartBoardSpecialistRecognitionRegistry.recognize(
                     review.editableLatex,
                     value,
-                    review.semanticTree,
+                    semanticTree,
                     nearbyShapes(review.input.bounds),
                 ),
             )
@@ -1534,7 +1571,17 @@ class SmartBoardViewModel(
 
     fun confirmRecognition() {
         val review = recognitionReview ?: return
-        val resolvedSubject = SmartBoardSubject.MATHEMATICS
+        val lockedSubject = document.subjectMode.selection.takeIf {
+            document.subjectMode.locked && it in SmartBoardClassroomSubjects.academic
+        }
+        val resolvedSubject = lockedSubject ?: sequenceOf(
+            review.selectedSubject,
+            review.subjectDetection?.primarySubject,
+            document.subjectMode.selection,
+        ).filterNotNull().firstOrNull { it in SmartBoardClassroomSubjects.academic } ?: run {
+            recognitionReview = review.copy(validationMessage = "Choose Mathematics, Physics, Chemistry or Biology.")
+            return
+        }
         val latex = if (resolvedSubject in setOf(SmartBoardSubject.MATHEMATICS, SmartBoardSubject.PHYSICS, SmartBoardSubject.CHEMISTRY)) {
             SafeLatexPreview.validate(review.editableLatex).getOrElse { error ->
                 recognitionReview = review.copy(validationMessage = error.message ?: "Invalid notation")
@@ -1611,7 +1658,18 @@ class SmartBoardViewModel(
                 now(), baseClassification,
             )
         }
-        val relatedElements = physicsAnalysis?.diagrams.orEmpty().mapIndexed { index, diagram ->
+        val preparedGraph = if (
+            resolvedSubject == SmartBoardSubject.MATHEMATICS &&
+            recognitionTarget == SmartBoardRecognitionTarget.GRAPH_2D
+        ) {
+            SmartBoardGraphAdapter.prepare(latex).getOrElse { error ->
+                recognitionReview = review.copy(
+                    validationMessage = "This handwriting is not graphable yet: ${SmartBoardSecurityPolicy.safeError(error)}",
+                )
+                return
+            }
+        } else null
+        val subjectRelatedElements = physicsAnalysis?.diagrams.orEmpty().mapIndexed { index, diagram ->
             PhysicsDiagramElement(
                 id = "physics-diagram-${UUID.randomUUID()}",
                 diagramType = diagram.type,
@@ -1624,6 +1682,18 @@ class SmartBoardViewModel(
                 createdAt = now(),
             )
         }
+        val graphElement = preparedGraph?.let { prepared ->
+            GraphConfigurationElement(
+                id = "graph-${UUID.randomUUID()}",
+                graphKind = prepared.kind,
+                expressions = listOf(prepared.expression),
+                sourceElementIds = listOf(element.id) + review.input.strokeIds,
+                moduleRoute = prepared.route,
+                bounds = element.bounds.translate(SmartBoardPoint(0f, element.bounds.height + 20f)),
+                createdAt = now(),
+            )
+        }
+        val relatedElements = subjectRelatedElements + listOfNotNull(graphElement)
         val relationship = SmartBoardRelationship(
             "recognized-${UUID.randomUUID()}",
             SmartBoardRelationshipType.RECOGNIZED_FROM,
@@ -1679,11 +1749,15 @@ class SmartBoardViewModel(
                 )
             }
         }
-        selectedIds = setOf(element.id)
+        selectedIds = setOf(graphElement?.id ?: element.id)
         recognitionReview = null
-        status = when (resolvedSubject) {
-            SmartBoardSubject.MATHEMATICS -> "Recognized expression inserted; source strokes preserved"
-            SmartBoardSubject.PHYSICS -> "Recognized Physics expression inserted; source strokes preserved"
+        if (preparedGraph != null) {
+            pendingGraphLaunch = SmartBoardGraphLaunch(preparedGraph.route, preparedGraph.expression)
+        }
+        status = when {
+            preparedGraph != null -> "Recognized expression inserted and opened as an editable graph"
+            resolvedSubject == SmartBoardSubject.MATHEMATICS -> "Recognized expression inserted; source strokes preserved"
+            resolvedSubject == SmartBoardSubject.PHYSICS -> "Recognized Physics expression inserted; source strokes preserved"
             else -> "Recognized ${resolvedSubject.displayName()} content inserted; source strokes preserved"
         }
     }
