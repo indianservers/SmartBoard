@@ -45,6 +45,9 @@ Phase 1 acceptance checks:
 
 ADB-generated straight-line strokes are not equivalent to human handwriting. On the attached
 Oppo CPH2717, the original English digital-ink model read the first highly angular synthetic
-`Sin(45)` attempt as `THEY`. The application correctly kept that result in the editable review
-instead of silently replacing the ink. Human-stylus acceptance data should be collected for a
+`Sin(45)` attempt as `THEY`, and a synthetic bracketed 2×2 matrix as `I4`. The application
+correctly kept those low-quality results in the editable review instead of silently replacing
+the ink. The semantic pipeline handles a matrix correctly once recognition supplies bracketed
+rows, but reliable cell extraction from raw ink needs a dedicated math-ink model or a
+geometry-aware matrix recognizer. Human-stylus acceptance data should be collected for a
 representative set of teachers before recognition quality is considered production-ready.
