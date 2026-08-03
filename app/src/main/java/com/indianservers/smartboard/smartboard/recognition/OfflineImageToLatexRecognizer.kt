@@ -311,6 +311,29 @@ internal class TexTellerVocabulary(file: File) {
     }
 }
 
+internal fun normalizeTexTellerLatex(source: String): String {
+    var value = source
+        .filterNot { character ->
+            character.category in setOf(
+                CharCategory.CONTROL,
+                CharCategory.FORMAT,
+                CharCategory.PRIVATE_USE,
+                CharCategory.SURROGATE,
+                CharCategory.UNASSIGNED,
+            )
+        }
+        .trim()
+    val wrappers = listOf("\\[" to "\\]", "\\(" to "\\)", "$$" to "$$", "$" to "$")
+    wrappers.firstOrNull { (start, end) ->
+        value.length >= start.length + end.length &&
+            value.startsWith(start) &&
+            value.endsWith(end)
+    }?.let { (start, end) ->
+        value = value.substring(start.length, value.length - end.length).trim()
+    }
+    return value.removePrefix("\\displaystyle").trim()
+}
+
 internal class TexTellerOnnxRuntime(private val pack: OfflineMathOcrModelPack) : AutoCloseable {
     private val environment = OrtEnvironment.getEnvironment()
     private val options = OrtSession.SessionOptions().apply {
@@ -322,7 +345,7 @@ internal class TexTellerOnnxRuntime(private val pack: OfflineMathOcrModelPack) :
     private val decoder = environment.createSession(pack.decoderFile().absolutePath, options)
     private val vocabulary = TexTellerVocabulary(pack.vocabularyFile())
 
-    fun recognize(bytes: ByteArray, maximumTokens: Int = 256): OfflineLatexPrediction {
+    fun recognize(bytes: ByteArray, maximumTokens: Int = 96): OfflineLatexPrediction {
         require(bytes.isNotEmpty()) { "The selected image is empty." }
         val pixels = OnnxTensor.createTensor(environment, OfflineMathImagePreprocessor.tensor(bytes), longArrayOf(1, 1, 448, 448))
         pixels.use { input ->
@@ -349,8 +372,11 @@ internal class TexTellerOnnxRuntime(private val pack: OfflineMathOcrModelPack) :
                         }
                     }
                 }
-                val latex = vocabulary.decode(ids.drop(1).map(Long::toInt))
+                val latex = normalizeTexTellerLatex(vocabulary.decode(ids.drop(1).map(Long::toInt)))
                 require(latex.isNotBlank()) { "The formula model returned an empty expression." }
+                require(SafeLatexPreview.validate(latex).isSuccess) {
+                    "The formula model returned malformed or unsupported notation."
+                }
                 val confidence = if (predicted == 0) .35f else exp(logProbability / predicted).toFloat().coerceIn(.35f, .995f)
                 return OfflineLatexPrediction(latex, confidence, predicted)
             }

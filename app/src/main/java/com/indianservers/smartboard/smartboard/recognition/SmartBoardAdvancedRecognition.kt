@@ -306,9 +306,10 @@ class MultimodalMathRecognitionEngine(
             val baseConfidence = result.confidence ?: .5f
             (listOf(result.latex to baseConfidence) + result.alternatives.map { it.latex to (it.confidence ?: baseConfidence * .75f) })
                 .forEachIndexed { index, (text, confidence) ->
-                    val normalized = normalize(text)
+                    val display = normalizeTexTellerLatex(text)
+                    val normalized = normalize(display)
                     if (normalized.isBlank()) return@forEachIndexed
-                    val accumulator = candidates.getOrPut(normalized) { Accumulator(display = text) }
+                    val accumulator = candidates.getOrPut(normalized) { Accumulator(display = display) }
                     accumulator.score += weight * confidence * (1f - index * .06f).coerceAtLeast(.65f)
                     accumulator.sources += source
                 }

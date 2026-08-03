@@ -89,6 +89,14 @@ class SmartBoardAdvancedRecognitionTest {
         assertTrue(RecognitionCandidateSource.PREVIOUS_STABLE in primary.sources)
         assertEquals("x^2+1", snapshot.stablePrimary)
         assertTrue(snapshot.stability >= .9f)
+
+        val sanitized = engine.fuse(
+            "sanitized",
+            result("\u200B\\[x+y=5\\]\uFEFF", .8f, "x+y=6"),
+            null,
+        )
+        assertEquals("x+y=5", sanitized.result.latex)
+        assertTrue(sanitized.candidates.first().parserVerified)
     }
 
     @Test

@@ -655,9 +655,16 @@ class SmartBoardViewModel(
             document.subjectMode.selection == SmartBoardSubject.MATHEMATICS
         ) {
             streamingRecognitionJob = viewModelScope.launch {
-                delay(250)
+                // Wait for an actual writing pause. Starting formula vision after every individual
+                // pen stroke interrupts multi-stroke equations and wastes on-device inference.
+                delay(900)
                 val current = document.elements.filterIsInstance<StrokeElement>().filterNot(StrokeElement::hidden)
-                val related = SmartBoardStrokeGrouper.recentRelated(current, stroke)
+                val related = SmartBoardStrokeGrouper.recentRelated(
+                    current,
+                    stroke,
+                    maximumGapMillis = 5_000,
+                    maximumStrokes = 48,
+                )
                 if (related.isEmpty() || correctionGestureSuggestion?.gestureStrokeId == stroke.id) return@launch
                 runCatching {
                     val draft = MathRecognitionRequestBuilder.build(
@@ -694,10 +701,14 @@ class SmartBoardViewModel(
                 delay(if (preferences.recognitionMode == SmartBoardRecognitionMode.AUTOMATIC) 900 else 1_500)
                 if (correctionGestureSuggestion?.gestureStrokeId == stroke.id) return@launch
                 val current = document.elements.filterIsInstance<StrokeElement>().filterNot(StrokeElement::hidden)
-                val related = SmartBoardStrokeGrouper.recentRelated(current, stroke)
+                val related = SmartBoardStrokeGrouper.recentRelated(
+                    current,
+                    stroke,
+                    maximumGapMillis = 5_000,
+                    maximumStrokes = 48,
+                )
                 if (related.isEmpty()) return@launch
-                selectedIds = related.mapTo(linkedSetOf(), StrokeElement::id)
-                recognizeSelection()
+                recognizeSelection(strokeIds = related.mapTo(linkedSetOf(), StrokeElement::id))
                 status = "Recognizing ${related.size} related handwriting stroke(s)"
             }
         }
@@ -1373,11 +1384,15 @@ class SmartBoardViewModel(
         }
     }
 
-    fun recognizeSelection(force: Boolean = false) {
+    fun recognizeSelection(force: Boolean = false, strokeIds: Set<String>? = null) {
         automaticRecognitionJob?.cancel()
         streamingRecognitionJob?.cancel()
         autoShapeJob?.cancel()
-        val strokes = (if (selectedIds.isEmpty()) document.elements else selectedElements)
+        val strokes = when {
+            strokeIds != null -> document.elements.filter { it.id in strokeIds }
+            selectedIds.isEmpty() -> document.elements
+            else -> selectedElements
+        }
             .filterIsInstance<StrokeElement>()
             .filterNot(StrokeElement::hidden)
         if (strokes.isEmpty()) {
@@ -1399,8 +1414,10 @@ class SmartBoardViewModel(
                 val png = withContext(Dispatchers.Default) { MathRecognitionInputRenderer.render(strokes, draft.bounds) }
                 val input = draft.copy(rasterPng = png)
                 val unified = unifiedRecognition.recognize(UnifiedRecognitionRequest(input, document.subjectMode))
-                if (unified.routedSubject == SmartBoardSubject.MATHEMATICS ||
-                    document.subjectMode.selection == SmartBoardSubject.MATHEMATICS
+                val explicitFormulaVision = strokeIds == null || force
+                if (explicitFormulaVision &&
+                    (unified.routedSubject == SmartBoardSubject.MATHEMATICS ||
+                        document.subjectMode.selection == SmartBoardSubject.MATHEMATICS)
                 ) {
                     val fused = multimodalRecognition.enhanceWithRaster(
                         com.indianservers.smartboard.smartboard.recognition.MathRecognitionInput(

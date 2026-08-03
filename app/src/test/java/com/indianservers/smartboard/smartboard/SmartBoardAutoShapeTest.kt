@@ -45,6 +45,11 @@ class SmartBoardAutoShapeTest {
             p(80f + cos(angle).toFloat() * 40f, 80f + sin(angle).toFloat() * 40f)
         }
         assertEquals(SmartBoardShapeType.CIRCLE, recognizer.recognize(listOf(stroke("circle", circlePoints))).first().type)
+        val stylusCircle = (0..16).map { index ->
+            val angle = 2.0 * PI * index / 16
+            p(80f + cos(angle).toFloat() * 40f, 80f + sin(angle).toFloat() * 40f)
+        }
+        assertEquals(SmartBoardShapeType.CIRCLE, recognizer.recognize(listOf(stroke("stylus-circle", stylusCircle))).first().type)
 
         val rectangle = stroke("rectangle", listOf(p(0f, 0f), p(100f, 0f), p(100f, 60f), p(0f, 60f), p(0f, 0f)))
         assertEquals(SmartBoardShapeType.RECTANGLE, recognizer.recognize(listOf(rectangle)).first().type)

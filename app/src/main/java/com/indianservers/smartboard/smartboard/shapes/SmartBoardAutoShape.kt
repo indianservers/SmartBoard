@@ -194,14 +194,20 @@ class DeterministicAutoShapeRecognizer(
         val aspect = box.width / max(box.height, 1f)
         val simplified = polygonVertices(path, box.diagonal * .055f)
         val out = mutableListOf<AutoShapeCandidate>()
-        if (radialCv < .22f && aspect in .72f..1.38f && simplified.size >= 6) {
+        val roundCandidate = radialCv < .22f && aspect in .72f..1.38f && simplified.size >= 6
+        if (roundCandidate) {
             val type = if (aspect in .88f..1.14f) SmartBoardShapeType.CIRCLE else SmartBoardShapeType.ELLIPSE
             out += candidate(type, ellipsePoints(box), .91f - radialCv * .55f - abs(1f - aspect).coerceAtMost(.3f) * .16f, "Closed path with stable radius", ids)
         }
         if (simplified.size in 3..8) {
             val polygon = classifyPolygon(simplified, box)
             val regularity = polygonRegularity(simplified)
-            out += candidate(polygon, simplified + simplified.first(), .75f + regularity * .16f, "${simplified.size}-corner closed polygon", ids)
+            val confidence = if (roundCandidate && polygon == SmartBoardShapeType.POLYGON) {
+                .72f
+            } else {
+                .75f + regularity * .16f
+            }
+            out += candidate(polygon, simplified + simplified.first(), confidence, "${simplified.size}-corner closed polygon", ids)
         } else if (looksLikeStar(path, centre)) {
             out += candidate(SmartBoardShapeType.STAR, starPoints(box), .78f, "Alternating inner and outer corners", ids)
         } else {

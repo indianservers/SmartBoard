@@ -65,6 +65,8 @@ class SmartBoardRecognitionTest {
 
     @Test
     fun classifierCoversPhase1FamiliesAndMalformedLatexIsRejectedSafely() {
+        assertTrue(SafeLatexPreview.validate("4.5").isSuccess)
+        assertTrue(SafeLatexPreview.validate("x+y=5").isSuccess)
         assertEquals(MathExpressionType.INEQUALITY, MathRecognitionClassifier.detect("x >= 2"))
         assertEquals(MathExpressionType.CALCULUS, MathRecognitionClassifier.detect("\\int x dx"))
         assertEquals(MathExpressionType.MATRIX, MathRecognitionClassifier.detect("[1,2;3,4]"))
