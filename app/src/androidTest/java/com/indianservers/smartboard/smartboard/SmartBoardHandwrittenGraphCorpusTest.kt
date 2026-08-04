@@ -204,6 +204,8 @@ internal object HumanInkWriter {
         '*' to listOf(listOf(.08f to .18f, .68f to .82f), listOf(.68f to .18f, .08f to .82f)),
         '(' to listOf(listOf(.58f to .02f, .28f to .22f, .14f to .52f, .28f to .82f, .58f to .98f)),
         ')' to listOf(listOf(.14f to .02f, .44f to .22f, .58f to .52f, .44f to .82f, .14f to .98f)),
+        '[' to listOf(listOf(.62f to .04f, .18f to .04f, .18f to .96f, .62f to .96f)),
+        ']' to listOf(listOf(.12f to .04f, .56f to .04f, .56f to .96f, .12f to .96f)),
         '{' to listOf(listOf(.58f to .02f, .30f to .12f, .30f to .40f, .08f to .50f, .30f to .60f, .30f to .88f, .58f to .98f)),
         '}' to listOf(listOf(.08f to .02f, .36f to .12f, .36f to .40f, .58f to .50f, .36f to .60f, .36f to .88f, .08f to .98f)),
         '<' to listOf(listOf(.68f to .12f, .08f to .50f, .68f to .88f)),
@@ -214,6 +216,11 @@ internal object HumanInkWriter {
         '.' to listOf(listOf(.35f to .88f, .37f to .90f)),
         '!' to listOf(listOf(.35f to .04f, .35f to .68f), listOf(.35f to .90f, .36f to .92f)),
         '√' to listOf(listOf(.02f to .55f, .20f to .86f, .42f to .12f, .82f to .12f)),
+        'π' to listOf(
+            listOf(.06f to .26f, .70f to .26f),
+            listOf(.20f to .26f, .18f to .92f),
+            listOf(.58f to .26f, .60f to .92f),
+        ),
         '1' to listOf(listOf(.18f to .25f, .38f to .05f, .38f to .92f), listOf(.15f to .92f, .65f to .92f)),
         '2' to listOf(listOf(.08f to .22f, .28f to .04f, .58f to .08f, .72f to .30f, .10f to .92f, .72f to .92f)),
         '3' to listOf(listOf(.08f to .10f, .45f to .03f, .68f to .25f, .38f to .48f, .70f to .68f, .52f to .94f, .08f to .88f)),
@@ -221,7 +228,7 @@ internal object HumanInkWriter {
         '5' to listOf(listOf(.70f to .08f, .12f to .08f, .10f to .46f, .52f to .42f, .72f to .62f, .60f to .90f, .08f to .88f)),
         '6' to listOf(listOf(.65f to .10f, .38f to .04f, .12f to .30f, .10f to .72f, .38f to .94f, .68f to .75f, .62f to .48f, .36f to .42f, .12f to .58f)),
         '7' to listOf(listOf(.08f to .08f, .70f to .08f, .38f to .92f)),
-        '8' to listOf(listOf(.38f to .04f, .12f to .22f, .20f to .50f, .08f to .74f, .38f to .94f, .68f to .74f, .56f to .50f, .66f to .22f, .38f to .04f)),
+        '8' to listOf(listOf(.38f to .04f, .12f to .22f, .38f to .50f, .08f to .74f, .38f to .94f, .68f to .74f, .38f to .50f, .66f to .22f, .38f to .04f)),
         '0' to listOf(listOf(.38f to .04f, .12f to .20f, .08f to .70f, .36f to .94f, .68f to .76f, .72f to .24f, .38f to .04f)),
         '9' to listOf(listOf(.62f to .48f, .38f to .62f, .10f to .42f, .14f to .10f, .46f to .04f, .68f to .26f, .62f to .72f, .38f to .96f, .12f to .88f)),
         's' to listOf(listOf(.70f to .14f, .38f to .04f, .10f to .25f, .56f to .50f, .72f to .72f, .48f to .94f, .08f to .84f)),
@@ -254,12 +261,22 @@ internal object HumanInkWriter {
     fun write(text: String, seed: Int): List<StrokeElement> {
         val output = mutableListOf<StrokeElement>()
         var cursor = 18f
+        var lineOffset = 0f
         var time = 1_000L + seed * 10_000L
         var superscript = false
         var subscript = false
         var superscriptGroup = false
         var subscriptGroup = false
         text.forEachIndexed { charIndex, char ->
+            if (char == ' ') {
+                cursor += 18f
+                return@forEachIndexed
+            }
+            if (char == '\n') {
+                cursor = 18f
+                lineOffset += 86f
+                return@forEachIndexed
+            }
             if (char == '^') {
                 superscript = true
                 superscriptGroup = text.getOrNull(charIndex + 1) == '{'
@@ -295,7 +312,7 @@ internal object HumanInkWriter {
                     val wobbleY = wobble(seed + 31, charIndex, strokeIndex, pointIndex) * 1.5f
                     StrokePoint(
                         x = cursor + point.first * glyphWidth + wobbleX,
-                        y = 18f + yOffset + point.second * 48f * scale + wobbleY,
+                        y = 18f + lineOffset + yOffset + point.second * 48f * scale + wobbleY,
                         pressure = .62f + .12f * wobble(seed + 7, charIndex, strokeIndex, pointIndex),
                         timestampMillis = time.also { time += 14L },
                     )

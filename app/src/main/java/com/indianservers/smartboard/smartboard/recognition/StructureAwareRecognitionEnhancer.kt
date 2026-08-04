@@ -5,6 +5,7 @@ import com.indianservers.smartboard.smartboard.models.MathRecognitionAlternative
 import com.indianservers.smartboard.smartboard.models.SmartBoardBounds
 import com.indianservers.smartboard.smartboard.models.StrokeElement
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 
@@ -82,7 +83,7 @@ internal class StructureAwareRecognitionEnhancer(
                 "insufficient-symbol-geometry",
             )
             val original = snapshot.candidates
-            val enhanced = original.mapNotNull { candidate ->
+            val scriptEnhanced = original.mapNotNull { candidate ->
                 val assembled = assemble(candidate.text, symbols) ?: return@mapNotNull null
                 if (assembled == candidate.text || !isBalanced(assembled)) return@mapNotNull null
                 val analysis = SmartBoardExpressionAnalyzer.analyze(assembled)
@@ -105,6 +106,21 @@ internal class StructureAwareRecognitionEnhancer(
                     detectedType = analysis.type,
                 )
             }
+            val spatialGlyphEnhanced = original.mapNotNull { candidate ->
+                val repaired = repairSpatialGlyphs(candidate.text, strokes)
+                if (repaired == candidate.text || !isBalanced(repaired)) return@mapNotNull null
+                val analysis = SmartBoardExpressionAnalyzer.analyze(repaired)
+                if (!analysis.parserVerified) return@mapNotNull null
+                RecognitionLatticeCandidate(
+                    text = repaired,
+                    normalizedExpression = analysis.normalized.replace(Regex("""\s+"""), ""),
+                    confidence = (candidate.confidence + .18f).coerceIn(0f, 1f),
+                    sources = candidate.sources + RecognitionCandidateSource.PARSER,
+                    parserVerified = true,
+                    detectedType = analysis.type,
+                )
+            }
+            val enhanced = scriptEnhanced + spatialGlyphEnhanced
             val elapsed = elapsedMillis(started)
             if (enhanced.isEmpty() || elapsed > config.maximumEnhancementMillis) {
                 return@runCatching unchanged(
@@ -116,9 +132,20 @@ internal class StructureAwareRecognitionEnhancer(
                     original.size,
                 )
             }
-            val lattice = (enhanced + original)
+            val powerAware = (enhanced + original)
                 .distinctBy { normalizeForDeduplication(it.text) }
-                .sortedByDescending(RecognitionLatticeCandidate::confidence)
+                .let(::sortRecognitionCandidates)
+            val preferRaisedX = raisedGlyphLooksLikeX(strokes) &&
+                powerAware.any { hasExponentVariable(it.text, 'x') }
+            val lattice = (if (preferRaisedX) {
+                powerAware.sortedWith(
+                    compareByDescending<RecognitionLatticeCandidate> {
+                        hasExponentVariable(it.text, 'x')
+                    }.thenByDescending(RecognitionLatticeCandidate::confidence),
+                )
+            } else {
+                powerAware
+            })
                 .take(8)
             val primary = lattice.first()
             if (primary.text == snapshot.result.latex) {
@@ -264,6 +291,66 @@ internal class StructureAwareRecognitionEnhancer(
         return horizontallyRelated && if (upper) limit.bottom < operator.center.y else limit.top > operator.center.y
     }
 
+    internal fun repairSpatialGlyphs(candidate: String, strokes: List<StrokeElement>): String {
+        var repaired = candidate
+        var radicalCount = strokes.count(::looksLikeRadical)
+        while (radicalCount > 0) {
+            val match = Regex("""(?<![A-Za-z])r\s*\(""", RegexOption.IGNORE_CASE).find(repaired) ?: break
+            repaired = repaired.replaceRange(match.range, "sqrt(")
+            radicalCount--
+        }
+        val bars = absoluteBarCount(strokes)
+        repaired = when (bars) {
+            2 -> Regex("""^1(.+)1(=.+)$""").replace(repaired, "|$1|$2")
+            4 -> Regex("""^1(.+?)1([+-])1(.+?)1(=.+)$""").replace(repaired, "|$1|$2|$3|$4")
+            else -> repaired
+        }
+        return repaired
+    }
+
+    internal fun raisedGlyphLooksLikeX(strokes: List<StrokeElement>): Boolean {
+        if (strokes.size < 3) return false
+        val nonHorizontal = strokes.filter { stroke ->
+            stroke.bounds.height >= 5f &&
+                stroke.bounds.width <= stroke.bounds.height * 2.2f
+        }
+        if (nonHorizontal.size < 3) return false
+        val referenceHeight = nonHorizontal.maxOf { it.bounds.height }.coerceAtLeast(1f)
+        val baselineCenters = nonHorizontal
+            .filter { it.bounds.height >= referenceHeight * .78f }
+            .map { it.bounds.center.y }
+        if (baselineCenters.isEmpty()) return false
+        val baseline = median(baselineCenters)
+        val raised = nonHorizontal.filter { stroke ->
+            stroke.bounds.height in (referenceHeight * .42f)..(referenceHeight * .80f) &&
+                stroke.bounds.center.y < baseline - referenceHeight * .12f
+        }
+        if (raised.size != 2) return false
+        val vectors = raised.mapNotNull { stroke ->
+            val points = stroke.points
+            if (points.size < 2) return@mapNotNull null
+            val direct = hypot(
+                (points.last().x - points.first().x).toDouble(),
+                (points.last().y - points.first().y).toDouble(),
+            ).toFloat()
+            val path = points.zipWithNext().sumOf { (first, second) ->
+                hypot(
+                    (second.x - first.x).toDouble(),
+                    (second.y - first.y).toDouble(),
+                )
+            }.toFloat()
+            if (direct < referenceHeight * .35f || path / direct > 1.18f) return@mapNotNull null
+            (points.last().x - points.first().x) to (points.last().y - points.first().y)
+        }
+        if (vectors.size != 2) return false
+        val diagonal = vectors.all { (dx, dy) ->
+            abs(dx) >= referenceHeight * .25f && abs(dy) >= referenceHeight * .38f
+        }
+        val oppositeSlopes = vectors[0].first * vectors[0].second *
+            vectors[1].first * vectors[1].second < 0f
+        return diagonal && oppositeSlopes
+    }
+
     private fun groupStrokes(strokes: List<StrokeElement>): List<SmartBoardBounds> {
         val bounds = strokes.map(StrokeElement::bounds)
         val parent = IntArray(bounds.size) { it }
@@ -296,6 +383,40 @@ internal class StructureAwareRecognitionEnhancer(
         val narrowWidth = min(first.width, second.width).coerceAtLeast(.5f)
         val centersClose = abs(first.center.x - second.center.x) <= max(first.width, second.width) * .48f
         return xOverlap / narrowWidth >= .18f || centersClose
+    }
+
+    private fun looksLikeRadical(stroke: StrokeElement): Boolean {
+        val points = stroke.points
+        if (points.size < 8 || stroke.bounds.width < stroke.bounds.height * .45f) return false
+        val maxIndex = points.indices.maxByOrNull { points[it].y } ?: return false
+        val minAfter = (maxIndex until points.size).minByOrNull { points[it].y } ?: return false
+        if (maxIndex !in 1 until points.lastIndex || minAfter <= maxIndex) return false
+        val height = stroke.bounds.height.coerceAtLeast(1f)
+        val startsMidway = points.first().y > stroke.bounds.top + height * .28f
+        val descends = points[maxIndex].y > stroke.bounds.top + height * .70f
+        val rises = points[minAfter].y < stroke.bounds.top + height * .30f
+        val finishesHigh = points.last().y < stroke.bounds.top + height * .36f
+        return startsMidway && descends && rises && finishesHigh
+    }
+
+    private fun absoluteBarCount(strokes: List<StrokeElement>): Int {
+        val heights = strokes.map { it.bounds.height }.filter { it > 4f }.sorted()
+        if (heights.isEmpty()) return 0
+        val reference = heights[((heights.lastIndex) * .72f).toInt()].coerceAtLeast(12f)
+        return strokes.count { stem ->
+            val bounds = stem.bounds
+            val vertical = bounds.height >= reference * .78f &&
+                bounds.width <= bounds.height * .16f
+            if (!vertical) return@count false
+            val hasDigitBase = strokes.any { other ->
+                other !== stem &&
+                    other.bounds.width >= reference * .28f &&
+                    abs(other.bounds.center.x - bounds.center.x) <= reference * .35f &&
+                    other.bounds.top >= bounds.bottom - reference * .22f &&
+                    other.bounds.top <= bounds.bottom + reference * .18f
+            }
+            !hasDigitBase
+        }
     }
 
     private fun visibleAtoms(candidate: String): List<Char> {
@@ -359,6 +480,10 @@ internal class StructureAwareRecognitionEnhancer(
 
     private fun normalizeForDeduplication(value: String) =
         value.lowercase().replace(Regex("""\s+"""), "")
+
+    private fun hasExponentVariable(value: String, variable: Char): Boolean =
+        Regex("""\^(?:\{|\()?\s*${Regex.escape(variable.toString())}""", RegexOption.IGNORE_CASE)
+            .containsMatchIn(value)
 
     private fun isLongHorizontal(bounds: SmartBoardBounds, referenceHeight: Float) =
         bounds.width >= bounds.height.coerceAtLeast(1f) * 2.4f &&

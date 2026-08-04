@@ -17,4 +17,19 @@ class OfflineMathRecognitionNormalizationTest {
         assertEquals("\\sin(45)", normalizeTexTellerLatex("\\[\\displaystyle \\sin(45)\\]"))
         assertEquals("4.5", normalizeTexTellerLatex("\\[\u200B4.5\uFEFF\\]"))
     }
+
+    @Test
+    fun repairsTangentFunctionGlyphConfusionWithoutChangingOrdinaryWords() {
+        assertEquals("\\tan(x)=1", normalizeTexTellerLatex("ton(x)=1"))
+        assertEquals("\\tan\\left(x\\right)", normalizeTexTellerLatex("\\ton\\left(x\\right)"))
+        assertEquals("one ton", normalizeTexTellerLatex("one ton"))
+    }
+
+    @Test
+    fun removesOnlyRedundantWholeExpressionLatexGrouping() {
+        assertEquals("3^{2x}=27", normalizeTexTellerLatex("{3^{2x}}=27"))
+        assertEquals("x+1", normalizeTexTellerLatex("{x+1}"))
+        assertEquals("{x+1}y", normalizeTexTellerLatex("{x+1}y"))
+        assertEquals("{x+1", normalizeTexTellerLatex("{x+1"))
+    }
 }

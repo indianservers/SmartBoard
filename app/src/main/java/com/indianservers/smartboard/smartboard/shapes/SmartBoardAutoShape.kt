@@ -149,11 +149,21 @@ class DeterministicAutoShapeRecognizer(
                 arcOrCurve(path, ids)?.let(::add)
             } else {
                 threeDimensional(paths, ids).forEach(::add)
+                polyhedralMesh(paths, ids)?.let(::add)
+                multiStrokeStar(paths, ids)?.let(::add)
                 multiLinePolygon(paths, ids)?.let(::add)
                 arrow(paths, ids)?.let(::add)
                 axesOrAngle(paths, ids).forEach(::add)
                 numberLine(paths, ids)?.let(::add)
                 graphGrid(paths, ids)?.let(::add)
+                // Keep useful component evidence for constructions such as an annulus,
+                // chord, tangent, polyhedron, or sphere. Strong 3D templates remain
+                // primary because their confidence is higher than component evidence.
+                paths.forEach { path ->
+                    closed(path, ids).map { it.copy(confidence = min(it.confidence, .88f)) }.forEach(::add)
+                    arcOrCurve(path, ids)?.copy(confidence = .66f)?.let(::add)
+                    line(path, ids)?.copy(confidence = .70f)?.let(::add)
+                }
             }
         }
         return candidates
@@ -199,6 +209,18 @@ class DeterministicAutoShapeRecognizer(
                     "Two aligned elliptical rims with parallel sides",
                     ids,
                 )
+            } else {
+                val widthRatio = min(topBox.width, bottomBox.width) /
+                    max(topBox.width, bottomBox.width).coerceAtLeast(1f)
+                if (widthRatio in .32f..68f && separated && sideCount >= 2) {
+                    out += candidate(
+                        SmartBoardShapeType.CONE,
+                        rounded.flatMap(::pairwisePath) + straight.flatMap { listOf(it.first, it.second) },
+                        .91f,
+                        "Two unequal aligned rims with converging frustum sides",
+                        ids,
+                    )
+                }
             }
         }
 
@@ -225,15 +247,69 @@ class DeterministicAutoShapeRecognizer(
         if (rounded.size >= 3) {
             val boxes = rounded.map(::bounds)
             val commonCentre = boxes.all { it.center.distanceTo(allBounds.center) <= allBounds.diagonal * .18f }
-            val comparable = boxes.all {
-                it.width >= allBounds.width * .45f && it.height >= allBounds.height * .45f
+            val outline = boxes.any {
+                it.width >= allBounds.width * .78f && it.height >= allBounds.height * .78f
             }
-            if (commonCentre && comparable) {
+            val latitude = boxes.any {
+                it.width >= allBounds.width * .65f && it.height <= allBounds.height * .42f
+            }
+            val longitude = boxes.any {
+                it.height >= allBounds.height * .65f && it.width <= allBounds.width * .42f
+            }
+            if (commonCentre && outline && latitude && longitude) {
                 out += candidate(
                     SmartBoardShapeType.SPHERE,
                     rounded.flatMap(::pairwisePath),
                     .93f,
                     "Overlapping circular outline and great-circle curves",
+                    ids,
+                )
+            }
+        }
+
+        if (rounded.size >= 2) {
+            val boxes = rounded.map(::bounds)
+            val commonCentre = boxes.all { it.center.distanceTo(allBounds.center) <= allBounds.diagonal * .18f }
+            val nested = boxes.maxOf { it.width } > boxes.minOf { it.width } * 1.35f
+            if (commonCentre && nested) {
+                val type = if (allBounds.width / allBounds.height.coerceAtLeast(1f) in .86f..1.16f) {
+                    SmartBoardShapeType.CIRCLE
+                } else {
+                    SmartBoardShapeType.ELLIPSE
+                }
+                out += candidate(type, rounded.flatMap(::pairwisePath), .89f, "Concentric rounded construction", ids)
+            }
+        }
+
+        if (rounded.size == 1) {
+            val rimBox = bounds(rounded.single())
+            val dome = paths.firstOrNull { path ->
+                path !in rounded &&
+                    arcOrCurve(path, ids) != null &&
+                    path.first().distanceTo(path.last()) >= bounds(path).diagonal * .18f &&
+                    bounds(path).width >= rimBox.width * .75f &&
+                    bounds(path).bottom <= rimBox.center.y + tolerance * 1.4f
+            }
+            if (dome != null) {
+                out += candidate(
+                    SmartBoardShapeType.SPHERE,
+                    pairwisePath(rounded.single()) + pairwisePath(dome),
+                    .88f,
+                    "Dome arc attached to an elliptical great-circle rim",
+                    ids,
+                )
+            }
+        }
+
+        if (straight.size == 6) {
+            val tetraClusters = cluster(straight.flatMap { listOf(it.first, it.second) }, tolerance)
+            val tetraVertices = tetraClusters.filter { it.size >= 2 }
+            if (tetraVertices.size == 4 && tetraVertices.all { it.size >= 3 }) {
+                out += candidate(
+                    SmartBoardShapeType.PYRAMID,
+                    straight.flatMap { listOf(it.first, it.second) },
+                    .94f,
+                    "Six-edge four-vertex tetrahedral wire-frame",
                     ids,
                 )
             }
@@ -245,7 +321,67 @@ class DeterministicAutoShapeRecognizer(
                 SmartBoardPoint(group.map { it.x }.average().toFloat(), group.map { it.y }.average().toFloat())
             }
             val edgeCoverage = straight.size.toFloat() / vertices.size.coerceAtLeast(1)
-            if (vertices.size in 7..10 && edgeCoverage >= .9f) {
+            val apexCluster = clusters.maxByOrNull { it.size }
+            val maximumDegree = apexCluster?.size ?: 0
+            val apexCentre = apexCluster?.let { group ->
+                SmartBoardPoint(group.map { it.x }.average().toFloat(), group.map { it.y }.average().toFloat())
+            }
+            val apexExtreme = apexCentre != null && (
+                apexCentre.y <= allBounds.top + allBounds.height * .24f ||
+                    apexCentre.y >= allBounds.bottom - allBounds.height * .24f
+                )
+            val yOrdered = vertices.sortedBy { it.y }
+            val upper = yOrdered.take(vertices.size / 2)
+            val lower = yOrdered.takeLast(vertices.size / 2)
+            val nestedFrameRatio = if (vertices.size == 8 && upper.size == 4 && lower.size == 4) {
+                min(bounds(upper).width, bounds(lower).width) /
+                    max(bounds(upper).width, bounds(lower).width).coerceAtLeast(1f)
+            } else {
+                1f
+            }
+            val maximumParallelFamily = straight.indices.maxOfOrNull { firstIndex ->
+                val first = straight[firstIndex]
+                val firstVector = first.second - first.first
+                val firstLength = first.first.distanceTo(first.second).coerceAtLeast(1f)
+                straight.count { segment ->
+                    val length = segment.first.distanceTo(segment.second).coerceAtLeast(1f)
+                    acuteAngle(firstVector, segment.second - segment.first) < 9.0 &&
+                        min(firstLength, length) / max(firstLength, length) > .55f
+                }
+            } ?: 0
+            if (straight.size >= 13 && maximumParallelFamily >= 3) {
+                out += candidate(
+                    SmartBoardShapeType.CUBOID,
+                    straight.flatMap { listOf(it.first, it.second) },
+                    .95f,
+                    "Parallel connector family joins two polygonal prism faces",
+                    ids,
+                )
+            } else if (vertices.size == 8 && nestedFrameRatio < .72f) {
+                out += candidate(
+                    SmartBoardShapeType.PYRAMID,
+                    straight.flatMap { listOf(it.first, it.second) },
+                    .93f,
+                    "Two nested quadrilateral rims connected as a frustum",
+                    ids,
+                )
+            } else if (maximumDegree >= 5 && apexExtreme && clusters.count { it.size >= 2 } >= 4) {
+                out += candidate(
+                    SmartBoardShapeType.PYRAMID,
+                    straight.flatMap { listOf(it.first, it.second) },
+                    .94f,
+                    "Multiple base edges converge at one high-degree apex",
+                    ids,
+                )
+            } else if (vertices.size == 4 && straight.size >= 6 && maximumDegree >= 3) {
+                out += candidate(
+                    SmartBoardShapeType.PYRAMID,
+                    straight.flatMap { listOf(it.first, it.second) },
+                    .92f,
+                    "Four-vertex tetrahedral wire-frame",
+                    ids,
+                )
+            } else if (vertices.size == 8 && straight.size <= 12 && edgeCoverage >= .9f) {
                 val aspect = allBounds.width / allBounds.height.coerceAtLeast(1f)
                 val type = if (aspect in .78f..1.28f) SmartBoardShapeType.CUBE else SmartBoardShapeType.CUBOID
                 out += candidate(
@@ -253,6 +389,14 @@ class DeterministicAutoShapeRecognizer(
                     straight.flatMap { listOf(it.first, it.second) },
                     .91f + (straight.size.coerceAtMost(12) - 7) * .008f,
                     "Connected wire-frame with ${vertices.size} fitted vertices",
+                    ids,
+                )
+            } else if (vertices.size in 6..14 && edgeCoverage >= .72f && maximumDegree <= 3) {
+                out += candidate(
+                    SmartBoardShapeType.CUBOID,
+                    straight.flatMap { listOf(it.first, it.second) },
+                    .89f,
+                    "Two polygonal faces joined by prism edges",
                     ids,
                 )
             } else {
@@ -302,15 +446,30 @@ class DeterministicAutoShapeRecognizer(
         // Preserve enough points to distinguish a smooth hand-drawn ellipse, while
         // using a stronger pass for polygon corner counting so pen tremor does not
         // turn a pentagon into a hexagon.
-        val smoothVertices = polygonVertices(path, box.diagonal * .065f)
-        val simplified = collapseSpuriousPolygonCorner(polygonVertices(path, box.diagonal * .09f))
+        val smoothVertices = polygonVertices(path, box.diagonal * .042f)
+        val simplified = stabilizePolygonCorners(smoothVertices, box)
         val out = mutableListOf<AutoShapeCandidate>()
-        val roundCandidate = radialCv < .22f && aspect in .42f..2.4f && smoothVertices.size >= 7
+        val starCandidate = looksLikeStar(path, centre)
+        val concaveCandidate = isConcavePolygon(simplified)
+        val perimeter = pathLength(path).coerceAtLeast(1f)
+        val maximumSegmentShare = path.zipWithNext()
+            .maxOfOrNull { (first, second) -> first.distanceTo(second) / perimeter }
+            ?: 1f
+        val roundCandidate = radialCv < .22f && aspect in .42f..2.4f &&
+            maximumSegmentShare < .09f && !starCandidate
         if (roundCandidate) {
             val type = if (aspect in .88f..1.14f) SmartBoardShapeType.CIRCLE else SmartBoardShapeType.ELLIPSE
             out += candidate(type, ellipsePoints(box), .91f - radialCv * .55f - abs(1f - aspect).coerceAtMost(.3f) * .16f, "Closed path with stable radius", ids)
         }
-        if (simplified.size in 3..8) {
+        if (starCandidate) {
+            out += candidate(SmartBoardShapeType.STAR, starPoints(box), .90f, "Alternating inner and outer corners", ids)
+        } else if (concaveCandidate) {
+            out += candidate(SmartBoardShapeType.CLOSED_REGION, simplified + simplified.first(), .90f, "Concave closed region", ids)
+        } else if (looksLikeSemicircle(simplified, box)) {
+            out += candidate(SmartBoardShapeType.SEMICIRCLE, simplified + simplified.first(), .88f, "Arc closed by one diameter edge", ids)
+        } else if (!roundCandidate && aspect in 1.2f..2.8f && simplified.size >= 5) {
+            out += candidate(SmartBoardShapeType.CLOSED_REGION, simplified + simplified.first(), .86f, "Elongated closed outline with rounded ends", ids)
+        } else if (simplified.size in 3..10) {
             val polygon = classifyPolygon(simplified, box)
             val regularity = polygonRegularity(simplified)
             val confidence = if (roundCandidate && polygon == SmartBoardShapeType.POLYGON) {
@@ -319,8 +478,6 @@ class DeterministicAutoShapeRecognizer(
                 .75f + regularity * .16f
             }
             out += candidate(polygon, simplified + simplified.first(), confidence, "${simplified.size}-corner closed polygon", ids)
-        } else if (looksLikeStar(path, centre)) {
-            out += candidate(SmartBoardShapeType.STAR, starPoints(box), .78f, "Alternating inner and outer corners", ids)
         } else {
             out += candidate(SmartBoardShapeType.CLOSED_REGION, path, .64f, "Closed freehand region", ids)
         }
@@ -358,6 +515,44 @@ class DeterministicAutoShapeRecognizer(
         val head = simple.drop(1).dropLast(1).filter { it.distanceTo(tip) in (shaftLength * .08f)..(shaftLength * .38f) }
         if (head.size < 2 || shaftLength < 24f) return null
         return candidate(SmartBoardShapeType.ARROW, listOf(shaftStart, tip, head[0], tip, head[1]), .70f, "Shaft with two arrowhead arms", ids)
+    }
+
+    private fun multiStrokeStar(
+        paths: List<List<SmartBoardPoint>>,
+        ids: List<String>,
+    ): AutoShapeCandidate? {
+        if (paths.size != 2) return null
+        val triangles = paths.map { path ->
+            stabilizePolygonCorners(polygonVertices(path, bounds(path).diagonal * .05f), bounds(path))
+        }
+        if (triangles.any { it.size != 3 }) return null
+        val boxes = paths.map(::bounds)
+        val combined = bounds(paths.flatten())
+        val aligned = boxes.all { it.center.distanceTo(combined.center) <= combined.diagonal * .18f }
+        val opposite = triangles.map { vertices -> vertices.minBy { it.y }.y to vertices.maxBy { it.y }.y }
+        if (!aligned || opposite[0] == opposite[1]) return null
+        return candidate(SmartBoardShapeType.STAR, paths.flatMap(::pairwisePath), .94f, "Two overlapping triangular outlines", ids)
+    }
+
+    private fun polyhedralMesh(
+        paths: List<List<SmartBoardPoint>>,
+        ids: List<String>,
+    ): AutoShapeCandidate? {
+        val closedFaces = paths.mapNotNull { path ->
+            val box = bounds(path)
+            if (path.first().distanceTo(path.last()) > box.diagonal * .20f) return@mapNotNull null
+            stabilizePolygonCorners(polygonVertices(path, box.diagonal * .05f), box)
+                .takeIf { it.size in 3..10 }
+        }
+        val connectorCount = paths.count { path -> line(path, ids) != null }
+        if (closedFaces.size < 2 || connectorCount < 3) return null
+        return candidate(
+            SmartBoardShapeType.POLYGON,
+            closedFaces.flatten(),
+            .92f,
+            "Multiple polygonal faces joined as a polyhedral mesh",
+            ids,
+        )
     }
 
     private fun arcOrCurve(path: List<SmartBoardPoint>, ids: List<String>): AutoShapeCandidate? {
@@ -420,6 +615,8 @@ class DeterministicAutoShapeRecognizer(
                 }
             } else if (angle < 9.0) {
                 out += candidate(SmartBoardShapeType.PARALLEL_LINES, listOf(a.first, a.second, b.first, b.second), .78f, "Two parallel fitted lines", ids)
+            } else if (angle in 15.0..165.0 && endpointDistance(a, b) <= max(12f, bounds(paths.flatten()).diagonal * .12f)) {
+                out += candidate(SmartBoardShapeType.ANGLE, listOf(a.first, a.second, b.first, b.second), .79f, "Two fitted rays sharing a vertex", ids)
             }
         }
         return out
@@ -495,6 +692,71 @@ private fun collapseSpuriousPolygonCorner(vertices: List<SmartBoardPoint>): List
     return if (polygonRegularity(withoutStart) >= polygonRegularity(withoutEnd)) withoutStart else withoutEnd
 }
 
+private fun stabilizePolygonCorners(
+    vertices: List<SmartBoardPoint>,
+    box: SmartBoardBounds,
+): List<SmartBoardPoint> {
+    if (vertices.size !in 4..12) return vertices
+    val stable = vertices.toMutableList()
+    while (stable.size > 3) {
+        val angles = interiorAngles(stable)
+        val removable = stable.indices
+            .map { index ->
+                val previous = stable[(index - 1 + stable.size) % stable.size]
+                val current = stable[index]
+                val next = stable[(index + 1) % stable.size]
+                val chord = previous.distanceTo(next).coerceAtLeast(1f)
+                val altitude = distanceToSegment(current, previous, next)
+                Triple(index, angles[index], altitude / max(chord, box.diagonal * .25f))
+            }
+            .filter { (_, interior, relativeAltitude) ->
+                interior >= 158.0 || (interior >= 145.0 && relativeAltitude < .065f)
+            }
+            .maxByOrNull { it.second }
+            ?: break
+        stable.removeAt(removable.first)
+    }
+    return collapseSpuriousPolygonCorner(stable)
+}
+
+private fun looksLikeSemicircle(
+    vertices: List<SmartBoardPoint>,
+    box: SmartBoardBounds,
+): Boolean {
+    if (vertices.size !in 5..9) return false
+    val sides = cyclicSides(vertices)
+    val longestIndex = sides.indices.maxBy { sides[it] }
+    val longest = sides[longestIndex]
+    val typical = sides.filterIndexed { index, _ -> index != longestIndex }
+        .sorted()
+        .let { it[it.size / 2] }
+        .coerceAtLeast(1f)
+    if (longest < box.width * .72f || longest < typical * 1.55f) return false
+    val start = vertices[longestIndex]
+    val end = vertices[(longestIndex + 1) % vertices.size]
+    val remaining = vertices.indices
+        .filter { it != longestIndex && it != (longestIndex + 1) % vertices.size }
+        .map { index ->
+            (end.x - start.x) * (vertices[index].y - start.y) -
+                (end.y - start.y) * (vertices[index].x - start.x)
+        }
+        .filter { abs(it) > box.diagonal }
+    return remaining.isNotEmpty() && (remaining.all { it > 0f } || remaining.all { it < 0f })
+}
+
+private fun isConcavePolygon(vertices: List<SmartBoardPoint>): Boolean {
+    if (vertices.size < 4) return false
+    val turns = vertices.indices.mapNotNull { index ->
+        val previous = vertices[(index - 1 + vertices.size) % vertices.size]
+        val current = vertices[index]
+        val next = vertices[(index + 1) % vertices.size]
+        val cross = (current.x - previous.x) * (next.y - current.y) -
+            (current.y - previous.y) * (next.x - current.x)
+        cross.takeIf { abs(it) > 1f }?.let { if (it > 0f) 1 else -1 }
+    }
+    return turns.any { it > 0 } && turns.any { it < 0 }
+}
+
 private fun looksLikeStar(path: List<SmartBoardPoint>, centre: SmartBoardPoint): Boolean {
     val vertices = polygonVertices(path, bounds(path).diagonal * .035f)
     if (vertices.size !in 8..12) return false
@@ -516,7 +778,11 @@ private fun isRoundedClosedPath(path: List<SmartBoardPoint>): Boolean {
     if (path.size < 6) return false
     val box = bounds(path)
     if (box.diagonal < 16f || path.first().distanceTo(path.last()) > box.diagonal * .22f) return false
-    return ellipseCoefficient(path, box) < .30f
+    val perimeter = pathLength(path).coerceAtLeast(1f)
+    val maximumSegmentShare = path.zipWithNext()
+        .maxOfOrNull { (first, second) -> first.distanceTo(second) / perimeter }
+        ?: 1f
+    return path.size >= 8 && ellipseCoefficient(path, box) < .30f && maximumSegmentShare < .20f
 }
 
 private fun pairwisePath(path: List<SmartBoardPoint>): List<SmartBoardPoint> =

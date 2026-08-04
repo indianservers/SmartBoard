@@ -269,6 +269,38 @@ class MultimodalMathRecognitionEngine(
         input: MathRecognitionInput,
         options: MathRecognitionOptions = MathRecognitionOptions(),
         previousPrimary: String? = null,
+    ): StreamingRecognitionSnapshot {
+        val lines = splitVisualLines(input.strokes)
+        if (lines.size > 1) {
+            val started = System.currentTimeMillis()
+            val snapshots = lines.mapIndexed { index, strokes ->
+                val bounds = SmartBoardBounds.from(
+                    strokes.flatMap { stroke -> stroke.points.map { it.position } },
+                ).expand(12f)
+                recognizeSingle(
+                    MathRecognitionInput(
+                        strokes = strokes,
+                        bounds = bounds,
+                        rasterPng = MathRecognitionInputRenderer.render(strokes, bounds),
+                        requestFingerprint = "${input.requestFingerprint}-line-$index",
+                    ),
+                    options,
+                    previousPrimary = null,
+                )
+            }
+            return combineVisualLines(
+                input.requestFingerprint,
+                snapshots,
+                System.currentTimeMillis() - started,
+            )
+        }
+        return recognizeSingle(input, options, previousPrimary)
+    }
+
+    private suspend fun recognizeSingle(
+        input: MathRecognitionInput,
+        options: MathRecognitionOptions,
+        previousPrimary: String?,
     ): StreamingRecognitionSnapshot = supervisorScope {
         val started = System.currentTimeMillis()
         val digital = async {
@@ -296,6 +328,70 @@ class MultimodalMathRecognitionEngine(
             fused,
             input.strokes,
         ).snapshot
+    }
+
+    private fun combineVisualLines(
+        fingerprint: String,
+        lines: List<StreamingRecognitionSnapshot>,
+        latencyMillis: Long,
+    ): StreamingRecognitionSnapshot {
+        val latex = lines.joinToString(";") { it.result.latex }
+        val normalized = lines.joinToString(";") {
+            it.result.normalizedExpression ?: it.result.latex
+        }
+        val confidence = lines.mapNotNull { it.result.confidence }.minOrNull() ?: 0f
+        val sources = lines.flatMap { it.candidates.firstOrNull()?.sources.orEmpty() }.toSet()
+        val candidate = RecognitionLatticeCandidate(
+            text = latex,
+            normalizedExpression = normalized,
+            confidence = confidence,
+            sources = sources,
+            parserVerified = lines.all { it.candidates.firstOrNull()?.parserVerified == true },
+            detectedType = MathExpressionType.SYSTEM,
+        )
+        val result = MathRecognitionResult(
+            latex = latex,
+            normalizedExpression = normalized,
+            plainText = latex,
+            confidence = confidence,
+            alternatives = emptyList(),
+            detectedType = MathExpressionType.SYSTEM,
+            warnings = lines.flatMap { it.result.warnings }.distinct() +
+                "Recognized as ${lines.size} spatially separate equation lines.",
+        )
+        return StreamingRecognitionSnapshot(
+            requestFingerprint = fingerprint,
+            candidates = listOf(candidate),
+            stablePrimary = null,
+            stability = lines.minOfOrNull(StreamingRecognitionSnapshot::stability) ?: 0f,
+            latencyMillis = latencyMillis,
+            result = result,
+        )
+    }
+
+    private fun splitVisualLines(strokes: List<StrokeElement>): List<List<StrokeElement>> {
+        if (strokes.size < 4) return listOf(strokes)
+        val heights = strokes.map { it.bounds.height.coerceAtLeast(1f) }.sorted()
+        val referenceHeight = heights[((heights.lastIndex) * .72f).toInt()].coerceAtLeast(12f)
+        val anchors = strokes.filter { stroke ->
+            stroke.bounds.height >= referenceHeight * .72f &&
+                stroke.bounds.width < stroke.bounds.height * 3.2f
+        }
+        if (anchors.size < 2) return listOf(strokes)
+        val threshold = (referenceHeight * 1.18f).coerceIn(44f, 68f)
+        val centers = mutableListOf<Float>()
+        anchors.map { it.bounds.center.y }.sorted().forEach { center ->
+            val nearest = centers.indices.minByOrNull { index -> abs(centers[index] - center) }
+            if (nearest == null || abs(centers[nearest] - center) > threshold) {
+                centers += center
+            } else {
+                centers[nearest] = (centers[nearest] + center) / 2f
+            }
+        }
+        if (centers.size !in 2..6) return listOf(strokes)
+        return strokes.groupBy { stroke ->
+            centers.indices.minBy { index -> abs(centers[index] - stroke.bounds.center.y) }
+        }.toSortedMap().values.map { line -> line.sortedBy(StrokeElement::createdAt) }
     }
 
     suspend fun enhanceWithRaster(
@@ -356,12 +452,13 @@ class MultimodalMathRecognitionEngine(
                 candidate.score += .12f
                 candidate.sources += RecognitionCandidateSource.PARSER
             }
+            candidate.score += powerStructureScoreAdjustment(normalized, analysis.parserVerified)
             if (previousPrimary != null && normalize(previousPrimary) == normalized) {
                 candidate.score += .08f
                 candidate.sources += RecognitionCandidateSource.PREVIOUS_STABLE
             }
         }
-        val lattice = candidates.map { (normalized, candidate) ->
+        val scoredCandidates = candidates.map { (normalized, candidate) ->
             val analysis = SmartBoardExpressionAnalyzer.analyze(normalized)
             RecognitionLatticeCandidate(
                 candidate.display,
@@ -371,7 +468,8 @@ class MultimodalMathRecognitionEngine(
                 analysis.parserVerified,
                 analysis.type,
             )
-        }.sortedByDescending(RecognitionLatticeCandidate::confidence).take(8)
+        }
+        val lattice = sortRecognitionCandidates(scoredCandidates).take(8)
         require(lattice.isNotEmpty()) { "Recognition returned no usable candidates." }
         val primary = lattice.first()
         val stability = when {
@@ -454,6 +552,44 @@ class MultimodalMathRecognitionEngine(
         const val RASTER_PROVIDER_TIMEOUT_MILLIS = 30_000L
         const val PROVIDER_RETRY_COOLDOWN_MILLIS = 60_000L
     }
+}
+
+/**
+ * Candidate-level evidence for handwritten powers. A dangling quote, prime, or empty group after
+ * a caret is a common OCR artifact and is not a complete exponent. Conversely, a parser-verified
+ * explicit exponent receives a small preference. The adjustment only changes ranking among
+ * recognizer hypotheses; it never invents the missing exponent.
+ */
+internal fun powerStructureScoreAdjustment(expression: String, parserVerified: Boolean): Float {
+    val compact = expression.replace(Regex("""\s+"""), "")
+    if (hasMalformedPowerStructure(compact)) return -.55f
+    val explicitPower = hasCompletePowerStructure(compact)
+    return if (parserVerified && explicitPower) .035f else 0f
+}
+
+internal fun hasMalformedPowerStructure(expression: String): Boolean {
+    val compact = expression.replace(Regex("""\s+"""), "")
+    return Regex("""\^(?:\{\s*)?(?:["'`]|\\prime)(?:\s*\})?(?=[=+\-*/),;]|$)""")
+        .containsMatchIn(compact) ||
+        Regex("""\^(?:\{\}|\(\))""").containsMatchIn(compact) ||
+        "^^" in compact
+}
+
+internal fun hasCompletePowerStructure(expression: String): Boolean =
+    Regex("""\^(?:\{|\()?[+\-]?[A-Za-z0-9]""")
+        .containsMatchIn(expression.replace(Regex("""\s+"""), ""))
+
+internal fun sortRecognitionCandidates(
+    candidates: List<RecognitionLatticeCandidate>,
+): List<RecognitionLatticeCandidate> {
+    val hasCompletePowerCandidate = candidates.any {
+        hasCompletePowerStructure(it.text) && !hasMalformedPowerStructure(it.text)
+    }
+    return candidates.sortedWith(
+        compareByDescending<RecognitionLatticeCandidate> {
+            !hasCompletePowerCandidate || !hasMalformedPowerStructure(it.text)
+        }.thenByDescending(RecognitionLatticeCandidate::confidence),
+    )
 }
 
 class StreamingMathRecognitionEngine(

@@ -61,7 +61,12 @@ object SmartBoardLatexAdapter {
 
     fun toEngineExpression(source: String): String {
         val typedPiecewise = source.trim().startsWith("piecewise{", ignoreCase = true)
-        var value = source.trim().replace("\\left", "").replace("\\right", "")
+        var value = source.trim()
+            .replace(
+                Regex("""(?<=[\[;,])\s*\\times\s*(?=[,;\]])"""),
+                "x",
+            )
+            .replace("\\left", "").replace("\\right", "")
             .replace(Regex("""\^\{([^{}]+)\}""")) { "^(${it.groupValues[1]})" }
             .replace(Regex("""_\{([^{}]+)\}""")) { "_${it.groupValues[1]}" }
         repeat(16) {

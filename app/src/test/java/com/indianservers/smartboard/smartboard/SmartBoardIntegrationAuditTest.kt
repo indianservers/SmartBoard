@@ -86,6 +86,15 @@ class SmartBoardIntegrationAuditTest {
     }
 
     @Test
+    fun latexAdapterTreatsTimesAsXOnlyWhenItIsAnIsolatedMatrixCell() {
+        assertEquals(
+            "[x,1;2,x]",
+            SmartBoardLatexAdapter.toEngineExpression("[\\times,1;2,\\times]"),
+        )
+        assertEquals("2* x", SmartBoardLatexAdapter.toEngineExpression("2\\times x"))
+    }
+
+    @Test
     fun graphAdapterUsesTypedGraphAndSurfaceEnginesForEverySupportedFamily() {
         val cases = mapOf(
             "y=a*x^2+b" to SmartBoardGraphKind.EXPLICIT_2D,

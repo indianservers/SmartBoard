@@ -107,6 +107,31 @@ class StructureAwareRecognitionEnhancerTest {
     }
 
     @Test
+    fun radicalGlyphRepairsOcrLetterRWithoutAnswerLookup() {
+        val radical = polyline(
+            "radical",
+            listOf(0f to 24f, 6f to 38f, 13f to 4f, 31f to 4f),
+        )
+        val content = stroke("content", 38f, 6f, 58f, 38f)
+        assertEquals(
+            "sqrt(x+5)=7",
+            enhancer.repairSpatialGlyphs("r(x+5)=7", listOf(radical, content)),
+        )
+    }
+
+    @Test
+    fun pairedVerticalBarsRepairAbsoluteValueOnTheLeftSideOnly() {
+        val strokes = listOf(
+            stroke("left-bar", 0f, 0f, 1f, 45f),
+            stroke("x", 12f, 2f, 28f, 44f),
+            stroke("minus", 34f, 22f, 49f, 23f),
+            stroke("three", 56f, 2f, 72f, 44f),
+            stroke("right-bar", 82f, 0f, 83f, 45f),
+        )
+        assertEquals("|x-3|=7", enhancer.repairSpatialGlyphs("1x-31=7", strokes))
+    }
+
+    @Test
     fun summationUpperAndLowerLimitsAreSpatiallyDistinct() {
         val operator = box(20f, 20f, 50f, 70f)
         assertTrue(enhancer.isLimitAttachment(operator, box(26f, 0f, 44f, 15f), upper = true))
@@ -155,6 +180,28 @@ class StructureAwareRecognitionEnhancerTest {
             enhancer.inferSymbols(original).map(SpatialSymbol::zone),
             enhancer.inferSymbols(transformed).map(SpatialSymbol::zone),
         )
+    }
+
+    @Test
+    fun twoStraightCrossingRaisedStrokesProvideExponentXEvidence() {
+        val strokes = listOf(
+            stroke("base", 0f, 30f, 15f, 74f),
+            polyline("x-down", listOf(22f to 4f, 38f to 26f)),
+            polyline("x-up", listOf(38f to 4f, 22f to 26f)),
+            stroke("rhs", 50f, 30f, 65f, 74f),
+        )
+        assertTrue(enhancer.raisedGlyphLooksLikeX(strokes))
+    }
+
+    @Test
+    fun raisedForkAndDescenderAreNotMisclassifiedAsExponentX() {
+        val strokes = listOf(
+            stroke("base", 0f, 30f, 15f, 74f),
+            polyline("fork", listOf(22f to 4f, 30f to 17f, 38f to 4f)),
+            polyline("descender", listOf(30f to 17f, 27f to 30f)),
+            stroke("rhs", 50f, 30f, 65f, 74f),
+        )
+        assertFalse(enhancer.raisedGlyphLooksLikeX(strokes))
     }
 
     @Test
@@ -260,6 +307,35 @@ class StructureAwareRecognitionEnhancerTest {
             0xFFFFFFFF,
             SmartBoardBounds.from(points.map(StrokePoint::position)),
             2L,
+        )
+    }
+
+    private fun polyline(id: String, coordinates: List<Pair<Float, Float>>): StrokeElement {
+        val points = coordinates.flatMapIndexed { index, (x, y) ->
+            if (index == coordinates.lastIndex) {
+                listOf(StrokePoint(x, y, .7f, index.toLong()))
+            } else {
+                val (nextX, nextY) = coordinates[index + 1]
+                List(5) { step ->
+                    val amount = step / 5f
+                    StrokePoint(
+                        x + (nextX - x) * amount,
+                        y + (nextY - y) * amount,
+                        .7f,
+                        (index * 5L) + step,
+                    )
+                }
+            }
+        }
+        return StrokeElement(
+            id,
+            points,
+            StrokeTool.PEN,
+            3f,
+            1f,
+            0xFFFFFFFF,
+            SmartBoardBounds.from(points.map(StrokePoint::position)),
+            points.last().timestampMillis,
         )
     }
 

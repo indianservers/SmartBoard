@@ -331,7 +331,38 @@ internal fun normalizeTexTellerLatex(source: String): String {
     }?.let { (start, end) ->
         value = value.substring(start.length, value.length - end.length).trim()
     }
-    return value.removePrefix("\\displaystyle").trim()
+    value = value.removePrefix("\\displaystyle").trim()
+    // TexTeller occasionally confuses the open handwritten "a" in tan with "o".
+    // Restrict the repair to a complete function token followed by an argument so
+    // ordinary prose or variable names such as "ton" remain untouched.
+    value = value.replace(
+        Regex("""(?<![A-Za-z\\])\\?ton(?=\s*(?:\\left\s*)?\()""", RegexOption.IGNORE_CASE),
+    ) { "\\tan" }
+    return removeRedundantOuterLatexGroup(value)
+}
+
+internal fun removeRedundantOuterLatexGroup(source: String): String {
+    if (!source.startsWith('{')) return source
+    var depth = 0
+    source.forEachIndexed { index, character ->
+        when (character) {
+            '{' -> depth++
+            '}' -> {
+                depth--
+                if (depth == 0) {
+                    val suffix = source.substring(index + 1)
+                    val relation = suffix.trimStart().firstOrNull()
+                    return if (relation == null || relation in "=<>") {
+                        source.substring(1, index) + suffix
+                    } else {
+                        source
+                    }
+                }
+            }
+        }
+        if (depth < 0) return source
+    }
+    return source
 }
 
 internal class TexTellerOnnxRuntime(private val pack: OfflineMathOcrModelPack) : AutoCloseable {

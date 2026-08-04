@@ -126,6 +126,31 @@ class SmartBoardAdvancedRecognitionTest {
     }
 
     @Test
+    fun malformedPowerGlyphIsDemotedInFavorOfVerifiedExponentAlternative() {
+        val engine = MultimodalMathRecognitionEngine(
+            digitalInk = object : MathHandwritingRecognitionProvider {
+                override val id = "unused"
+                override val productionReady = true
+                override suspend fun recognize(input: MathRecognitionInput, options: MathRecognitionOptions) =
+                    result("unused", .5f, "unused-alt")
+            },
+            image = object : MathImageRecognitionProvider {
+                override val id = "unused"
+                override suspend fun recognize(png: ByteArray, maximumAlternatives: Int) =
+                    result("unused", .5f, "unused-alt")
+            },
+        )
+        val formula = result("""2^"=32""", .92f, "2^x=32").copy(
+            warnings = listOf("Recognized completely offline with the dedicated TexTeller mathematical vision model."),
+        )
+
+        val snapshot = engine.fuse("power-artifact", formula, formula)
+
+        assertEquals("2^x=32", snapshot.result.latex)
+        assertTrue(snapshot.result.alternatives.any { it.latex == """2^"=32""" })
+    }
+
+    @Test
     fun correctionDetectorFindsScribbleAndStrikethroughWithoutDeletingAutomatically() {
         val target = line("target", 10f, 20f, 90f, 20f, createdAt = 1)
         val strike = line("strike", 0f, 21f, 100f, 21f, points = 8, createdAt = 100)
