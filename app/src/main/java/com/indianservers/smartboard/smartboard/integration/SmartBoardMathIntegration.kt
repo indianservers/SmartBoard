@@ -86,7 +86,7 @@ object SmartBoardLatexAdapter {
             .replace("\\pi", "pi").replace("\\theta", "theta")
             .replace("\\lambda", "lambda").replace("\\phi", "phi")
             .replace("\\infty", "infinity")
-            .replace(Regex("""\\(sin|cos|tan|sec|csc|cot|asin|acos|atan|sinh|cosh|tanh|log|ln|exp|min|max)\b""")) {
+            .replace(Regex("""\\(sin|cos|tan|sec|csc|cot|asin|acos|atan|sinh|cosh|tanh|log|ln|exp|min|max)(?=\b|_)""")) {
                 it.groupValues[1]
             }
             .replace(Regex("""\s+"""), " ")

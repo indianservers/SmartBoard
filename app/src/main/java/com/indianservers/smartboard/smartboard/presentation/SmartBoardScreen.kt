@@ -43,6 +43,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -61,6 +62,7 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -150,7 +152,18 @@ fun SmartBoardFeatureRoot(
     var latexEditorOpen by remember { mutableStateOf(false) }
     var graphEditorOpen by remember { mutableStateOf(false) }
     var toolboxOpen by remember { mutableStateOf(false) }
+    var canvasCommandOpen by remember { mutableStateOf(false) }
     var detectionInboxOpen by remember { mutableStateOf(false) }
+    var quickControlsOpen by remember { mutableStateOf(false) }
+    var helpOpen by remember { mutableStateOf(false) }
+    var focusMode by remember { mutableStateOf(false) }
+    var toolbarCollapsed by remember { mutableStateOf(false) }
+    var coachDismissed by remember(vm.document.id) { mutableStateOf(false) }
+    var strokeWidth by remember(vm.document.id) { mutableStateOf(3.2f) }
+    var strokeOpacity by remember(vm.document.id) { mutableStateOf(1f) }
+    var strokeColor by remember(vm.document.id) { mutableStateOf(0xFFF4F7FF) }
+    val detectionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val commandSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var pendingExport by remember { mutableStateOf(SmartBoardExportFormat.STRUCTURED) }
     var eraserRadius by remember { mutableStateOf(18f) }
     val context = LocalContext.current
@@ -211,12 +224,15 @@ fun SmartBoardFeatureRoot(
             (if (vm.recognitionReview != null) 1 else 0) +
                 (if (vm.streamingRecognitionSuggestion != null) 1 else 0) +
                 (if (vm.shapeSuggestion != null) 1 else 0) +
-                (if (vm.correctionGestureSuggestion != null) 1 else 0)
+                (if (vm.correctionGestureSuggestion != null) 1 else 0) +
+                (if (vm.canvasIntelligence.hypotheses.isNotEmpty()) 1 else 0) +
+                (if (vm.semanticCanvas.nodes.isNotEmpty()) 1 else 0) +
+                (if (vm.graphFromInkSuggestion != null || vm.localizedMathMistake != null) 1 else 0)
         LaunchedEffect(quietDetectionCount) {
             if (quietDetectionCount == 0) detectionInboxOpen = false
         }
         Column(Modifier.fillMaxSize()) {
-            SmartBoardTopBar(
+            if (!focusMode) SmartBoardTopBar(
                 title = vm.document.title,
                 subject = vm.document.subjectMode.selection,
                 onTitle = vm::rename,
@@ -287,8 +303,14 @@ fun SmartBoardFeatureRoot(
                 },
             )
             Row(Modifier.weight(1f)) {
-                if (wide) {
-                    SmartBoardToolbar(vm, vertical = true, onToolbox = { toolboxOpen = true }, modifier = Modifier.width(78.dp).fillMaxHeight())
+                if (wide && !toolbarCollapsed && !focusMode) {
+                    SmartBoardToolbar(
+                        vm,
+                        vertical = true,
+                        onToolbox = { toolboxOpen = true },
+                        onCommand = { canvasCommandOpen = true },
+                        modifier = Modifier.width(78.dp).fillMaxHeight(),
+                    )
                 }
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     AndroidView(
@@ -296,9 +318,12 @@ fun SmartBoardFeatureRoot(
                             SmartBoardCanvasView(context).apply {
                                 onStrokeCommitted = vm::addStroke
                                 onSelectionChanged = vm::select
+                                onSemanticLasso = vm::semanticLasso
                                 onErase = vm::erase
                                 onMoveSelection = vm::moveSelection
+                                onSnapSelection = vm::snapSelection
                                 onViewportChanged = vm::updateViewport
+                                onUncertaintyTapped = vm::openAmbiguityRegion
                             }
                         },
                         update = { canvas ->
@@ -306,13 +331,80 @@ fun SmartBoardFeatureRoot(
                             canvas.selectedIds = vm.selectedIds
                             canvas.activeTool = vm.activeTool
                             canvas.preferences = vm.preferences
-                            canvas.strokeStyle = SmartBoardStrokeStyle()
+                            canvas.strokeStyle = SmartBoardStrokeStyle(
+                                width = strokeWidth,
+                                opacity = strokeOpacity,
+                                argbColor = strokeColor,
+                            )
                             canvas.eraserRadius = eraserRadius
+                            canvas.uncertaintyRegions = vm.canvasIntelligence.uncertaintyRegions
+                            canvas.ghostCompletion = vm.canvasIntelligence.ghostCompletion
+                            canvas.ambiguityLensEnabled = vm.ambiguityLensEnabled
+                            canvas.semanticLassoEnabled = vm.semanticLassoEnabled
+                            canvas.spatialHint = vm.spatialMathHint
                         },
                         modifier = Modifier.fillMaxSize().semantics {
                             contentDescription = "Vector Smart Board canvas with ${vm.document.elements.size} elements and ${vm.selectedIds.size} selected"
                         },
                     )
+                    WorkspaceHud(
+                        activeTool = vm.activeTool,
+                        zoom = vm.document.viewport.zoom,
+                        elementCount = vm.document.elements.size,
+                        selectionCount = vm.selectedIds.size,
+                        detectionCount = quietDetectionCount,
+                        focusMode = focusMode,
+                        toolbarCollapsed = toolbarCollapsed,
+                        onQuickControls = { quickControlsOpen = !quickControlsOpen },
+                        onFocusMode = {
+                            focusMode = !focusMode
+                            quickControlsOpen = false
+                        },
+                        onToggleToolbar = { toolbarCollapsed = !toolbarCollapsed },
+                        modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
+                    )
+                    if (quickControlsOpen) {
+                        QuickControlsPanel(
+                            vm = vm,
+                            strokeColor = strokeColor,
+                            strokeWidth = strokeWidth,
+                            strokeOpacity = strokeOpacity,
+                            onStrokeColor = { strokeColor = it },
+                            onStrokeWidth = { strokeWidth = it },
+                            onStrokeOpacity = { strokeOpacity = it },
+                            onZoomOut = {
+                                vm.updateViewport(vm.document.viewport.copy(zoom = (vm.document.viewport.zoom / 1.2f).coerceAtLeast(.25f)))
+                            },
+                            onZoomIn = {
+                                vm.updateViewport(vm.document.viewport.copy(zoom = (vm.document.viewport.zoom * 1.2f).coerceAtMost(6f)))
+                            },
+                            onFit = vm::resetZoom,
+                            onHelp = {
+                                helpOpen = true
+                                quickControlsOpen = false
+                            },
+                            onClose = { quickControlsOpen = false },
+                            modifier = Modifier.align(Alignment.CenterStart).padding(10.dp),
+                        )
+                    }
+                    if (vm.document.elements.isEmpty() && !coachDismissed && !focusMode && !quickControlsOpen) {
+                        EmptyBoardCoach(
+                            onDraw = {
+                                vm.setTool(SmartBoardTool.PEN)
+                                coachDismissed = true
+                            },
+                            onObjects = {
+                                toolboxOpen = true
+                                coachDismissed = true
+                            },
+                            onCommand = {
+                                canvasCommandOpen = true
+                                coachDismissed = true
+                            },
+                            onDismiss = { coachDismissed = true },
+                            modifier = Modifier.align(Alignment.Center),
+                        )
+                    }
                     if (vm.selectedIds.isNotEmpty()) {
                         SelectionActions(
                             vm,
@@ -354,13 +446,19 @@ fun SmartBoardFeatureRoot(
                             modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
                         )
                     }
+                    vm.activeAmbiguityRegion?.let {
+                        AmbiguityLensCard(
+                            vm,
+                            Modifier.align(Alignment.Center).padding(16.dp),
+                        )
+                    }
                     vm.wholeBoardUnderstanding?.let {
                         WholeBoardUnderstandingCard(
                             vm,
                             Modifier.align(Alignment.Center).padding(16.dp).widthIn(max = 520.dp),
                         )
                     }
-                    Text(
+                    if (!focusMode) Text(
                         vm.status,
                         color = BoardInk,
                         fontSize = 11.sp,
@@ -396,32 +494,68 @@ fun SmartBoardFeatureRoot(
                     )
                 }
             }
-            if (!wide) {
-                SmartBoardToolbar(vm, vertical = false, onToolbox = { toolboxOpen = true }, modifier = Modifier.fillMaxWidth())
+            if (!wide && !toolbarCollapsed && !focusMode) {
+                SmartBoardToolbar(
+                    vm,
+                    vertical = false,
+                    onToolbox = { toolboxOpen = true },
+                    onCommand = { canvasCommandOpen = true },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+
+        if (helpOpen) {
+            OverlayPanel("SMART Board controls", onDismiss = { helpOpen = false }) {
+                BoardControlsHelp()
             }
         }
 
         if (detectionInboxOpen && quietDetectionCount > 0) {
-            ModalBottomSheet(onDismissRequest = { detectionInboxOpen = false }, containerColor = BoardPanel) {
-                if (vm.recognitionReview != null) {
-                    RecognitionPanel(vm, Modifier.fillMaxWidth().heightIn(max = if (compact) 620.dp else 720.dp))
-                } else {
-                    Column(
-                        Modifier.fillMaxWidth().heightIn(max = if (compact) 620.dp else 720.dp)
-                            .verticalScroll(rememberScrollState()).padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Text("Detected content", color = BoardInk, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        Text(
-                            "Nothing changes until you select and confirm a result.",
-                            color = BoardWarning,
-                            fontSize = 10.sp,
-                        )
-                        vm.streamingRecognitionSuggestion?.let { StreamingRecognitionCard(vm, Modifier.fillMaxWidth()) }
-                        vm.correctionGestureSuggestion?.let { CorrectionGestureCard(vm, Modifier.fillMaxWidth()) }
-                        vm.shapeSuggestion?.let { ShapeSuggestionCard(vm, Modifier.fillMaxWidth()) }
+            ModalBottomSheet(
+                onDismissRequest = { detectionInboxOpen = false },
+                sheetState = detectionSheetState,
+                containerColor = BoardPanel,
+            ) {
+                Column(
+                    Modifier.fillMaxWidth().fillMaxHeight(.9f)
+                        .verticalScroll(rememberScrollState()).padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text("Detected content", color = BoardInk, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Nothing changes until you select and confirm a result.",
+                        color = BoardWarning,
+                        fontSize = 10.sp,
+                    )
+                    vm.streamingRecognitionSuggestion?.let { StreamingRecognitionCard(vm, Modifier.fillMaxWidth()) }
+                    vm.correctionGestureSuggestion?.let { CorrectionGestureCard(vm, Modifier.fillMaxWidth()) }
+                    vm.shapeSuggestion?.let { ShapeSuggestionCard(vm, Modifier.fillMaxWidth()) }
+                    if (vm.canvasIntelligence.groups.isNotEmpty()) {
+                        CanvasIntelligenceCard(vm, Modifier.fillMaxWidth())
+                    }
+                    if (vm.semanticCanvas.nodes.isNotEmpty()) {
+                        SemanticCanvasCard(vm, Modifier.fillMaxWidth())
+                    }
+                    if (vm.graphFromInkSuggestion != null || vm.localizedMathMistake != null) {
+                        MathGraphIntelligenceCard(vm, Modifier.fillMaxWidth())
+                    }
+                    vm.recognitionReview?.let {
+                        RecognitionPanel(vm, Modifier.fillMaxWidth(), scrollable = false)
                     }
                 }
+            }
+        }
+        if (canvasCommandOpen) {
+            ModalBottomSheet(
+                onDismissRequest = { canvasCommandOpen = false },
+                sheetState = commandSheetState,
+                containerColor = BoardPanel,
+            ) {
+                CanvasCommandPanel(
+                    vm,
+                    Modifier.fillMaxWidth().fillMaxHeight(.9f),
+                )
             }
         }
         if (!wide && intelligenceOpen) {
@@ -907,10 +1041,280 @@ private fun SmartBoardTopBar(
 }
 
 @Composable
+private fun WorkspaceHud(
+    activeTool: SmartBoardTool,
+    zoom: Float,
+    elementCount: Int,
+    selectionCount: Int,
+    detectionCount: Int,
+    focusMode: Boolean,
+    toolbarCollapsed: Boolean,
+    onQuickControls: () -> Unit,
+    onFocusMode: () -> Unit,
+    onToggleToolbar: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier.semantics {
+            contentDescription =
+                "Workspace status. ${activeTool.name.lowercase()} active, ${(zoom * 100).toInt()} percent zoom, " +
+                    "$elementCount objects, $selectionCount selected, $detectionCount AI results."
+        },
+        color = BoardPanel.copy(alpha = .94f),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, BoardCyan.copy(.45f)),
+        tonalElevation = 6.dp,
+        shadowElevation = 8.dp,
+    ) {
+        FlowRow(
+            Modifier.padding(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            StatusChip(activeTool.name.lowercase().replace('_', ' ').replaceFirstChar(Char::titlecase), BoardCyan)
+            StatusChip("${(zoom * 100).toInt()}%", BoardViolet)
+            StatusChip("$elementCount objects", BoardMuted)
+            if (selectionCount > 0) StatusChip("$selectionCount selected", BoardWarning)
+            if (detectionCount > 0) StatusChip("$detectionCount AI", Color(0xFF8FE6B2))
+            BoardButton("Controls", onClick = onQuickControls)
+            BoardButton(if (focusMode) "Exit focus" else "Focus", onClick = onFocusMode)
+            if (!focusMode) {
+                BoardButton(if (toolbarCollapsed) "Show tools" else "Hide tools", onClick = onToggleToolbar)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusChip(label: String, color: Color) {
+    Text(
+        label,
+        color = color,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .background(Color.White.copy(.055f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+    )
+}
+
+@Composable
+private fun QuickControlsPanel(
+    vm: SmartBoardViewModel,
+    strokeColor: Long,
+    strokeWidth: Float,
+    strokeOpacity: Float,
+    onStrokeColor: (Long) -> Unit,
+    onStrokeWidth: (Float) -> Unit,
+    onStrokeOpacity: (Float) -> Unit,
+    onZoomOut: () -> Unit,
+    onZoomIn: () -> Unit,
+    onFit: () -> Unit,
+    onHelp: () -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier.widthIn(min = 290.dp, max = 390.dp).fillMaxHeight(.9f),
+        color = BoardPanel.copy(alpha = .98f),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.dp, BoardCyan.copy(.55f)),
+        tonalElevation = 10.dp,
+        shadowElevation = 14.dp,
+    ) {
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text("Quick Controls", color = BoardInk, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("Drawing, view and classroom display", color = BoardMuted, fontSize = 9.sp)
+                }
+                BoardButton("Close", onClick = onClose)
+            }
+
+            QuickSectionTitle("Ink style")
+            Text(
+                "●  ${strokeWidth.toInt()} px · ${(strokeOpacity * 100).toInt()}%",
+                color = Color(strokeColor),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(.2f), RoundedCornerShape(10.dp))
+                    .padding(9.dp)
+                    .semantics { contentDescription = "Current ink preview" },
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                listOf(
+                    0xFFF4F7FF to "White",
+                    0xFF39D5FF to "Cyan",
+                    0xFFFFD166 to "Yellow",
+                    0xFFFF6B8A to "Pink",
+                    0xFF91F2B6 to "Green",
+                    0xFFC7A4FF to "Violet",
+                ).forEach { (color, label) ->
+                    InkColorButton(label, color, strokeColor == color) { onStrokeColor(color) }
+                }
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(2f to "Fine", 3.2f to "Medium", 6f to "Bold").forEach { (width, label) ->
+                    BoardButton(if (strokeWidth == width) "✓ $label" else label) { onStrokeWidth(width) }
+                }
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(1f to "100%", .65f to "65%", .35f to "35%").forEach { (opacity, label) ->
+                    BoardButton(if (strokeOpacity == opacity) "✓ $label" else label) { onStrokeOpacity(opacity) }
+                }
+            }
+
+            QuickSectionTitle("View")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                BoardButton("− Zoom", onClick = onZoomOut)
+                StatusChip("${(vm.document.viewport.zoom * 100).toInt()}%", BoardCyan)
+                BoardButton("+ Zoom", onClick = onZoomIn)
+                BoardButton("Fit board", onClick = onFit)
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                SmartBoardBackground.entries.forEach { background ->
+                    val label = background.name.lowercase().replaceFirstChar(Char::titlecase)
+                    BoardButton(if (vm.document.background == background) "✓ $label" else label) {
+                        vm.changeBackground(background)
+                    }
+                }
+            }
+
+            QuickSectionTitle("Display and input")
+            SettingSwitch("High contrast", vm.preferences.highContrast) {
+                vm.updatePreferences(vm.preferences.copy(highContrast = it))
+            }
+            SettingSwitch("Reduced motion", vm.preferences.reducedMotion) {
+                vm.updatePreferences(vm.preferences.copy(reducedMotion = it))
+            }
+            BoardButton("Input: ${vm.preferences.inputMode.label()}") {
+                val modes = SmartBoardInputMode.entries
+                vm.setInputMode(modes[(modes.indexOf(vm.preferences.inputMode) + 1) % modes.size])
+            }
+            BoardButton("Gestures & shortcuts", onClick = onHelp)
+        }
+    }
+}
+
+@Composable
+private fun QuickSectionTitle(label: String) {
+    Text(
+        label,
+        color = BoardCyan,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+    )
+}
+
+@Composable
+private fun InkColorButton(label: String, argb: Long, selected: Boolean, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(11.dp)
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .onFocusChanged { focused = it.isFocused }
+            .border(if (focused) 3.dp else if (selected) 2.dp else 1.dp, if (focused) Color.White else Color(argb), shape)
+            .semantics { contentDescription = "$label ink colour${if (selected) ", selected" else ""}" },
+        shape = shape,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (selected) Color(argb).copy(alpha = .45f) else Color(0xFF24364A),
+            contentColor = BoardInk,
+        ),
+    ) {
+        Text("● $label", color = Color(argb), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun EmptyBoardCoach(
+    onDraw: () -> Unit,
+    onObjects: () -> Unit,
+    onCommand: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier.widthIn(max = 560.dp).fillMaxWidth(.78f).semantics {
+            contentDescription = "Empty board getting started coach"
+        },
+        color = BoardPanel.copy(alpha = .94f),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, BoardCyan.copy(.55f)),
+        tonalElevation = 8.dp,
+        shadowElevation = 12.dp,
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Start teaching", color = BoardInk, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "Write naturally anywhere. SMART Board detects quietly and keeps your original ink until you choose a result.",
+                color = BoardCyan,
+                fontSize = 11.sp,
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                BoardButton("Draw with pen", onClick = onDraw)
+                BoardButton("Add object", onClick = onObjects)
+                BoardButton("Ask AI command", onClick = onCommand)
+                BoardButton("Dismiss", onClick = onDismiss)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BoardControlsHelp() {
+    Text(
+        "Touch, stylus, TV remote and keyboard",
+        color = BoardCyan,
+        fontWeight = FontWeight.Bold,
+    )
+    listOf(
+        "Pinch" to "Zoom the board around the gesture.",
+        "Two-finger drag" to "Pan without changing the active drawing tool.",
+        "Stylus pressure" to "Vary line width when pressure sensitivity is enabled.",
+        "Lasso" to "Circle meaningful content; Smart Lasso keeps connected objects together.",
+        "AI Lens" to "Tap only the uncertain amber region to review alternatives.",
+        "TV remote" to "Use the D-pad; the focused control receives a bright white outline.",
+        "Ctrl + Z / Ctrl + Shift + Z" to "Undo or redo.",
+        "Ctrl + S" to "Save immediately.",
+        "Delete / Backspace" to "Delete the current selection.",
+        "Escape" to "Clear the current selection.",
+        "Focus Mode" to "Hide navigation and tools while presenting; Controls remains available.",
+    ).forEach { (title, explanation) ->
+        Surface(
+            Modifier.fillMaxWidth(),
+            color = Color.White.copy(.045f),
+            shape = RoundedCornerShape(10.dp),
+        ) {
+            Row(
+                Modifier.padding(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Text(title, color = BoardInk, fontWeight = FontWeight.Bold, modifier = Modifier.widthIn(min = 130.dp))
+                Text(explanation, color = BoardMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
 private fun SmartBoardToolbar(
     vm: SmartBoardViewModel,
     vertical: Boolean,
     onToolbox: () -> Unit,
+    onCommand: () -> Unit,
     modifier: Modifier,
 ) {
     val tools = listOf(
@@ -923,8 +1327,10 @@ private fun SmartBoardToolbar(
         Triple(SmartBoardTool.PAN, "Pan", "✥"),
     )
     val content: @Composable () -> Unit = {
-        tools.forEach { (tool, label, icon) ->
-            ToolButton(label, icon = icon, selected = vm.activeTool == tool) { vm.setTool(tool) }
+        if (vertical) ToolbarSectionLabel("Draw") else ToolbarDivider()
+        tools.forEachIndexed { index, (tool, label, icon) ->
+            val shortcut = listOf("P", "", "H", "E", "L", "", "V")[index]
+            ToolButton(label, icon = icon, selected = vm.activeTool == tool, shortcut = shortcut) { vm.setTool(tool) }
         }
         ToolButton(
             when (vm.activeTool) {
@@ -934,9 +1340,30 @@ private fun SmartBoardToolbar(
             },
             onClick = onToolbox,
         )
+        if (vertical) ToolbarSectionLabel("Edit") else ToolbarDivider()
         ToolButton("Undo", enabled = vm.canUndo) { vm.undo() }
         ToolButton("Redo", enabled = vm.canRedo) { vm.redo() }
+        if (vertical) ToolbarSectionLabel("AI") else ToolbarDivider()
+        ToolButton(
+            if (vm.ambiguityLensEnabled) "Lens ✓" else "AI Lens",
+            selected = vm.ambiguityLensEnabled,
+            enabled = vm.canvasIntelligence.uncertaintyRegions.isNotEmpty(),
+            onClick = vm::toggleAmbiguityLens,
+        )
+        ToolButton(
+            if (vm.semanticLassoEnabled) "Smart Lasso ✓" else "Geo Lasso",
+            selected = vm.semanticLassoEnabled,
+            onClick = vm::toggleSemanticLasso,
+        )
+        ToolButton("AI Command", onClick = onCommand)
         ToolButton(if (vm.recognizing) "Reading…" else "Recognize", enabled = !vm.recognizing) { vm.recognizeSelection() }
+        ToolButton(
+            "Eq → Graph",
+            enabled = !vm.recognizing &&
+                vm.document.subjectMode.selection in setOf(SmartBoardSubject.AUTO, SmartBoardSubject.MATHEMATICS),
+            onClick = vm::recognizeEquationAndGraph,
+        )
+        ToolButton("Fit Curve", onClick = vm::analyzeGraphInk)
         ToolButton(
             when (vm.recognitionTarget) {
                 SmartBoardRecognitionTarget.CONTENT -> "Graph AI"
@@ -954,6 +1381,7 @@ private fun SmartBoardToolbar(
                 },
             )
         }
+        if (vertical) ToolbarSectionLabel("View") else ToolbarDivider()
         ToolButton("Reset", onClick = vm::resetZoom)
         ToolButton("Grid") {
             val entries = SmartBoardBackground.entries
@@ -962,7 +1390,7 @@ private fun SmartBoardToolbar(
     }
     if (vertical) {
         Column(
-            modifier.background(BoardPanel).padding(5.dp),
+            modifier.background(BoardPanel).verticalScroll(rememberScrollState()).padding(5.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
@@ -999,14 +1427,40 @@ private fun SmartBoardToolbar(
 }
 
 @Composable
+private fun ToolbarSectionLabel(label: String) {
+    Text(
+        label.uppercase(),
+        color = BoardMuted,
+        fontSize = 8.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.fillMaxWidth().padding(top = 5.dp, bottom = 1.dp),
+        textAlign = TextAlign.Center,
+    )
+}
+
+@Composable
+private fun ToolbarDivider() {
+    Spacer(
+        Modifier
+            .width(1.dp)
+            .height(34.dp)
+            .background(BoardMuted.copy(alpha = .35f)),
+    )
+}
+
+@Composable
 private fun ClearBoardButton(enabled: Boolean, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(10.dp)
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(width = 74.dp, height = 48.dp).semantics {
-            contentDescription = "Clear Board"
-        },
-        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier
+            .size(width = 74.dp, height = 48.dp)
+            .onFocusChanged { focused = it.isFocused }
+            .border(if (focused) 3.dp else 0.dp, Color.White, shape)
+            .semantics { contentDescription = "Clear Board" },
+        shape = shape,
         colors = ButtonDefaults.buttonColors(
             containerColor = Color(0xFF7A2438),
             contentColor = BoardInk,
@@ -1024,11 +1478,17 @@ private fun ToolbarScrollButton(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(9.dp)
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(width = 42.dp, height = 48.dp).semantics { contentDescription = description },
-        shape = RoundedCornerShape(9.dp),
+        modifier = Modifier
+            .size(width = 42.dp, height = 48.dp)
+            .onFocusChanged { focused = it.isFocused }
+            .border(if (focused) 3.dp else 0.dp, Color.White, shape)
+            .semantics { contentDescription = description },
+        shape = shape,
         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30465D), contentColor = BoardInk),
         contentPadding = PaddingValues(0.dp),
     ) { Text(label, fontSize = 20.sp) }
@@ -1074,6 +1534,9 @@ private fun SelectionActions(
     onEditGraph: () -> Unit,
     modifier: Modifier,
 ) {
+    var editingNodeId by remember(vm.selectedExpression?.id) { mutableStateOf<String?>(null) }
+    var componentReplacement by remember(vm.selectedExpression?.id) { mutableStateOf("") }
+    var equivalentCandidate by remember(vm.selectedExpression?.id) { mutableStateOf("") }
     FlowRow(
         modifier.background(BoardPanel, RoundedCornerShape(12.dp)).border(1.dp, BoardCyan.copy(.45f), RoundedCornerShape(12.dp)).padding(6.dp),
         horizontalArrangement = Arrangement.spacedBy(5.dp),
@@ -1128,12 +1591,35 @@ private fun SelectionActions(
         }
         if (vm.selectedExpression != null) {
             BoardButton("Edit LaTeX", onClick = onEditLatex)
-            BoardButton("Hint") { vm.requestTutorHint() }
-            BoardButton("Next step") { vm.requestTutorHint(nextStepOnly = true) }
-            vm.semanticToolTargets.take(8).forEach { target ->
+            BoardButton("Hint beside line", onClick = vm::showSpatialNextStepHint)
+            BoardButton("Check steps", onClick = vm::localizeMathMistake)
+            if (vm.spatialMathHint != null) BoardButton("Hide hint", onClick = vm::dismissSpatialMathHint)
+            vm.semanticToolTargets.filter { it.depth > 0 }.take(12).forEach { target ->
                 BoardButton(
-                    if (vm.selectedSemanticNodeId == target.nodeId) "✓ ${target.expression.take(18)}" else target.expression.take(18),
-                ) { vm.selectSemanticNode(target.nodeId) }
+                    buildString {
+                        if (editingNodeId == target.nodeId) append("✓ ")
+                        append(target.role.name.lowercase().replace('_', ' '))
+                        append(": ")
+                        append(target.expression.take(14))
+                    },
+                ) {
+                    editingNodeId = target.nodeId
+                    componentReplacement = target.expression
+                    vm.selectSemanticNode(target.nodeId)
+                }
+            }
+            if (editingNodeId != null) {
+                OutlinedTextField(
+                    value = componentReplacement,
+                    onValueChange = { componentReplacement = it.take(500) },
+                    modifier = Modifier.widthIn(min = 190.dp, max = 320.dp),
+                    singleLine = true,
+                    label = { Text("Edit selected component") },
+                )
+                BoardButton("Apply component") {
+                    editingNodeId?.let { vm.replaceSemanticComponent(it, componentReplacement) }
+                    editingNodeId = null
+                }
             }
             SemanticToolOperation.entries.forEach { operation ->
                 BoardButton(
@@ -1146,10 +1632,44 @@ private fun SelectionActions(
             ) {
                 BoardButton("Matrix → table", onClick = vm::reconstructSelectedTable)
             }
+            OutlinedTextField(
+                value = equivalentCandidate,
+                onValueChange = { equivalentCandidate = it.take(1_000) },
+                modifier = Modifier.widthIn(min = 210.dp, max = 340.dp),
+                singleLine = true,
+                label = { Text("Compare equivalent expression") },
+            )
+            BoardButton("Check equivalence", enabled = equivalentCandidate.isNotBlank()) {
+                vm.checkEquivalentExpression(equivalentCandidate)
+            }
+            vm.equivalentExpressionResult?.let { result ->
+                Text(
+                    if (result.equivalent) "Equivalent ✓ · ${result.explanation}" else
+                        "Not equivalent · ${result.counterexample ?: result.explanation}",
+                    color = if (result.equivalent) BoardCyan else BoardWarning,
+                    fontSize = 10.sp,
+                    modifier = Modifier.widthIn(max = 360.dp),
+                )
+            }
         }
         vm.selectedGraph?.let { graph ->
             BoardButton("Edit graph", onClick = onEditGraph)
             BoardButton("Open graph") { onHandoff(graph.moduleRoute, graph.expressions.first()) }
+            vm.selectedGraphParameters.forEach { parameter ->
+                val current = graph.parameterValues[parameter.symbol] ?: parameter.initial
+                Column(Modifier.width(220.dp)) {
+                    Text(
+                        "${parameter.symbol} · ${parameter.semanticName} = ${"%.2f".format(current)}",
+                        color = BoardCyan,
+                        fontSize = 10.sp,
+                    )
+                    Slider(
+                        value = current.toFloat(),
+                        onValueChange = { vm.updateGraphParameter(parameter.symbol, it.toDouble()) },
+                        valueRange = parameter.minimum.toFloat()..parameter.maximum.toFloat(),
+                    )
+                }
+            }
         }
     }
 }
@@ -1186,6 +1706,385 @@ private fun QuietDetectionButton(
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
         )
+    }
+}
+
+@Composable
+private fun CanvasCommandPanel(vm: SmartBoardViewModel, modifier: Modifier = Modifier) {
+    var command by remember(vm.document.id) { mutableStateOf("") }
+    Column(
+        modifier.verticalScroll(rememberScrollState()).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("Natural-language canvas commands", color = BoardInk, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text(
+            "Commands run locally. Clear and delete commands always require confirmation.",
+            color = BoardWarning,
+            fontSize = 10.sp,
+        )
+        Text(
+            "Teach SMART Board mode · " +
+                if (vm.preferences.recognitionPersonalizationEnabled) "personal adaptation active" else "personal adaptation off",
+            color = BoardCyan,
+            fontWeight = FontWeight.Bold,
+        )
+        OutlinedTextField(
+            value = command,
+            onValueChange = { command = it.take(500) },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Tell SMART Board what to do") },
+            placeholder = { Text("Select all forces, graph this ink, or set a to 2") },
+            minLines = 2,
+        )
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            BoardButton("Run command", enabled = command.isNotBlank()) { vm.runCanvasCommand(command) }
+            listOf(
+                "Select every denominator",
+                "Graph this ink",
+                "Show next-step hint",
+                "Check my work for mistakes",
+                "Where did I use the quadratic formula?",
+            ).forEach { example ->
+                BoardButton(example) {
+                    command = example
+                    vm.runCanvasCommand(example)
+                }
+            }
+        }
+        vm.pendingCanvasCommand?.let { pending ->
+            Surface(
+                Modifier.fillMaxWidth(),
+                color = Color(0xFF482D32),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, BoardWarning),
+            ) {
+                Column(Modifier.padding(11.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text("Confirmation required", color = BoardWarning, fontWeight = FontWeight.Bold)
+                    Text(pending.summary, color = BoardInk)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        BoardButton("Confirm", warning = true, onClick = vm::confirmCanvasCommand)
+                        BoardButton("Cancel", onClick = vm::cancelCanvasCommand)
+                    }
+                }
+            }
+        }
+
+        Surface(
+            Modifier.fillMaxWidth(),
+            color = Color.White.copy(.05f),
+            shape = RoundedCornerShape(12.dp),
+        ) {
+            Column(Modifier.padding(11.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Text("Personal handwriting and object adaptation", color = BoardInk, fontWeight = FontWeight.Bold)
+                Text(
+                    if (vm.preferences.recognitionPersonalizationEnabled) {
+                        "Active · confirmed handwriting corrections and labelled objects influence future ranking."
+                    } else {
+                        "Off · existing examples remain private and stored locally."
+                    },
+                    color = BoardCyan,
+                    fontSize = 10.sp,
+                )
+                Text(
+                    "${vm.recognitionPersonalizationProfile.totalConfirmedCorrections} handwriting correction(s) · " +
+                        "${vm.canvasTeachingProfile.examples.size} labelled stroke/object example(s)",
+                    color = BoardMuted,
+                    fontSize = 10.sp,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    BoardButton(
+                        if (vm.preferences.recognitionPersonalizationEnabled) "Disable Teach mode" else "Enable Teach mode",
+                    ) { vm.setTeachSmartBoardMode(!vm.preferences.recognitionPersonalizationEnabled) }
+                    if (vm.selectedIds.isNotEmpty()) {
+                        BoardButton("Teach selection as command text", enabled = command.isNotBlank()) {
+                            vm.teachCurrentCanvasExample(command)
+                        }
+                    }
+                }
+                Text(
+                    "Examples never leave this device. You can clear handwriting corrections and object examples independently in Settings or Results.",
+                    color = BoardMuted,
+                    fontSize = 9.sp,
+                )
+            }
+        }
+        vm.lastCanvasCommand?.let { parsed ->
+            Text(
+                "Last command: ${parsed.summary}",
+                color = if (parsed.kind.name == "UNKNOWN") BoardWarning else BoardCyan,
+                fontSize = 10.sp,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
+        }
+    }
+}
+
+@Composable
+private fun CanvasIntelligenceCard(vm: SmartBoardViewModel, modifier: Modifier = Modifier) {
+    val snapshot = vm.canvasIntelligence
+    val ranked = snapshot.hypotheses.sortedByDescending { it.confidence }.take(5)
+    var teachingLabel by remember(snapshot.createdAt) {
+        mutableStateOf(ranked.firstOrNull()?.label.orEmpty())
+    }
+    Surface(
+        modifier,
+        color = Color(0xFF172B3A),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, BoardViolet.copy(.7f)),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Canvas intelligence", color = BoardInk, fontWeight = FontWeight.Bold)
+            snapshot.groups.forEach { group ->
+                Text(
+                    "${group.intent.name.lowercase().replaceFirstChar(Char::titlecase)} group · " +
+                        "${group.strokeIds.size} strokes · ${(group.confidence * 100).toInt()}%",
+                    color = BoardCyan,
+                    fontSize = 11.sp,
+                )
+                Text(group.rationale, color = BoardMuted, fontSize = 9.sp)
+            }
+            if (ranked.isNotEmpty()) {
+                Text("Ranked object hypotheses", color = BoardInk, fontWeight = FontWeight.Bold)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    ranked.forEachIndexed { index, hypothesis ->
+                        BoardButton(
+                            "${hypothesis.label}${if (hypothesis.incomplete) " (complete)" else ""} · " +
+                                "${(hypothesis.confidence * 100).toInt()}%",
+                        ) { vm.chooseCanvasHypothesis(index) }
+                    }
+                }
+            }
+            snapshot.ghostCompletion?.let { ghost ->
+                Text(
+                    "Optional completion: ${ghost.label} · ${(ghost.confidence * 100).toInt()}%",
+                    color = BoardWarning,
+                    fontSize = 11.sp,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    BoardButton("Review completion", onClick = vm::reviewGhostCompletion)
+                    BoardButton("Hide completion", onClick = vm::dismissGhostCompletion)
+                }
+            }
+            Text(
+                "${snapshot.uncertaintyRegions.size} uncertain stroke region(s). Enable AI Lens, then tap an amber stroke.",
+                color = BoardMuted,
+                fontSize = 10.sp,
+            )
+            OutlinedTextField(
+                value = teachingLabel,
+                onValueChange = { teachingLabel = it.take(80) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("Teach this handwriting or object as") },
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                BoardButton("Teach example") { vm.teachCurrentCanvasExample(teachingLabel) }
+                if (vm.canvasTeachingProfile.examples.isNotEmpty()) {
+                    BoardButton("Clear ${vm.canvasTeachingProfile.examples.size} taught", warning = true) {
+                        vm.clearCanvasTeachingExamples()
+                    }
+                }
+            }
+            Text(
+                "Teaching examples stay on this device and influence future candidate ranking.",
+                color = BoardMuted,
+                fontSize = 9.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SemanticCanvasCard(vm: SmartBoardViewModel, modifier: Modifier = Modifier) {
+    val snapshot = vm.semanticCanvas
+    var search by remember { mutableStateOf("") }
+    var meaning by remember { mutableStateOf("") }
+    val localNodes = snapshot.nodes.filter { it.boardId == vm.document.id }
+    val localIds = localNodes.mapTo(hashSetOf()) { it.id }
+    val localEdges = snapshot.edges.filter { it.fromNodeId in localIds || it.toNodeId in localIds }
+    Surface(
+        modifier,
+        color = Color(0xFF142D34),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, BoardCyan.copy(.65f)),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Semantic Canvas Graph", color = BoardInk, fontWeight = FontWeight.Bold)
+            Text(
+                "${localNodes.size} meaningful objects · ${localEdges.size} inferred relationships · " +
+                    "${snapshot.pageCount} indexed board page(s)",
+                color = BoardCyan,
+                fontSize = 11.sp,
+            )
+            localEdges.sortedByDescending { it.confidence }.take(5).forEach { edge ->
+                Text(
+                    "${edge.kind.name.lowercase().replace('_', ' ')} · ${(edge.confidence * 100).toInt()}% — ${edge.explanation}",
+                    color = BoardMuted,
+                    fontSize = 10.sp,
+                )
+            }
+
+            Text("Meaning-based selection", color = BoardInk, fontWeight = FontWeight.Bold)
+            OutlinedTextField(
+                value = meaning,
+                onValueChange = { meaning = it.take(120) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("e.g. select every denominator") },
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                BoardButton("Select") { vm.selectByMeaning(meaning) }
+                BoardButton("All denominators") { vm.selectByMeaning("select every denominator") }
+                BoardButton("All forces") { vm.selectByMeaning("select all forces") }
+                BoardButton("Equation + graph") { vm.selectByMeaning("select this equation and its graph") }
+            }
+            Text(
+                if (vm.semanticLassoEnabled) {
+                    "Smart Lasso is on: a rough circle selects complete meaningful objects and their linked labels."
+                } else {
+                    "Geometric lasso is on: only object centres inside the path are selected."
+                },
+                color = BoardWarning,
+                fontSize = 10.sp,
+            )
+
+            val proposals = localNodes.filter { it.proposedNames.isNotEmpty() }.take(5)
+            if (proposals.isNotEmpty()) {
+                Text("Smart object names", color = BoardInk, fontWeight = FontWeight.Bold)
+                proposals.forEach { node ->
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("${node.name}:", color = BoardMuted, fontSize = 10.sp)
+                        node.proposedNames.take(3).forEach { proposal ->
+                            BoardButton("+ $proposal") { vm.addProposedObjectName(node.id, proposal) }
+                        }
+                    }
+                }
+            }
+
+            Text("Canvas-wide semantic search", color = BoardInk, fontWeight = FontWeight.Bold)
+            OutlinedTextField(
+                value = search,
+                onValueChange = { search = it.take(160) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("Where did I use the quadratic formula?") },
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                BoardButton("Search all pages") { vm.searchCanvas(search) }
+                if (vm.semanticSearchResults.isNotEmpty()) {
+                    BoardButton("Clear results", onClick = vm::clearCanvasSearch)
+                }
+            }
+            vm.semanticSearchResults.take(10).forEach { result ->
+                Surface(
+                    Modifier.fillMaxWidth().clickable { vm.openSemanticSearchResult(result) },
+                    color = Color.White.copy(.05f),
+                    shape = RoundedCornerShape(9.dp),
+                ) {
+                    Column(Modifier.padding(8.dp)) {
+                        Text(
+                            "${result.title} · ${result.boardTitle} · ${(result.score * 100).toInt()}%",
+                            color = BoardCyan,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(result.context.ifBlank { "Structured canvas object" }, color = BoardMuted, fontSize = 9.sp)
+                    }
+                }
+            }
+            Text(
+                "Relationships and search are computed privately on-device. Moving objects uses contextual equation, table, axis and circuit snapping.",
+                color = BoardMuted,
+                fontSize = 9.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MathGraphIntelligenceCard(vm: SmartBoardViewModel, modifier: Modifier = Modifier) {
+    Surface(
+        modifier,
+        color = Color(0xFF1B293D),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, BoardViolet.copy(.75f)),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Mathematics and graph intelligence", color = BoardInk, fontWeight = FontWeight.Bold)
+            vm.graphFromInkSuggestion?.let { suggestion ->
+                Text(
+                    "Graph-from-ink · ${suggestion.sourceStrokeIds.size} curve/equation stroke(s) · " +
+                        "${suggestion.axisElementIds.size} axis object(s)",
+                    color = BoardCyan,
+                    fontSize = 11.sp,
+                )
+                Text(
+                    "Choose the closest editable fit. Handwriting and drawn axes remain unchanged.",
+                    color = BoardWarning,
+                    fontSize = 10.sp,
+                )
+                suggestion.candidates.forEachIndexed { index, candidate ->
+                    BoardButton(
+                        "${candidate.family}: ${candidate.expression.take(48)} · ${(candidate.confidence * 100).toInt()}%",
+                    ) { vm.chooseInkGraphCandidate(index) }
+                    Text(candidate.explanation, color = BoardMuted, fontSize = 9.sp)
+                }
+                if (suggestion.parameters.isNotEmpty()) {
+                    Text(
+                        "Discovered parameters: " + suggestion.parameters.joinToString { "${it.symbol} (${it.semanticName})" },
+                        color = BoardCyan,
+                        fontSize = 10.sp,
+                    )
+                }
+                BoardButton("Keep ink only", onClick = vm::dismissGraphFromInkSuggestion)
+            }
+            vm.localizedMathMistake?.let { mistake ->
+                Text(
+                    "Mistake localized at transformation ${mistake.invalidStepIndex + 1}",
+                    color = Color(0xFFFF8AA3),
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    "${mistake.beforeExpression}  →  ${mistake.afterExpression}",
+                    color = BoardInk,
+                    fontFamily = FontFamily.Serif,
+                    fontSize = 13.sp,
+                )
+                Text("${mistake.likelyCause}. ${mistake.message}", color = BoardWarning, fontSize = 10.sp)
+                BoardButton("Show beside invalid line", onClick = vm::localizeMathMistake)
+            }
+            if (vm.graphFromInkSuggestion == null && vm.localizedMathMistake == null) {
+                Text("No pending graph fit or invalid transformation.", color = BoardMuted)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AmbiguityLensCard(vm: SmartBoardViewModel, modifier: Modifier = Modifier) {
+    val region = vm.activeAmbiguityRegion ?: return
+    Surface(
+        modifier.widthIn(max = 470.dp),
+        color = BoardPanel,
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, BoardWarning),
+        tonalElevation = 8.dp,
+        shadowElevation = 12.dp,
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Ambiguity Lens", color = BoardInk, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "Only the tapped uncertain stroke is being reviewed. Original ink is unchanged.",
+                color = BoardWarning,
+                fontSize = 10.sp,
+            )
+            region.alternatives.forEachIndexed { index, alternative ->
+                BoardButton(
+                    "${alternative.label} · ${(alternative.confidence * 100).toInt()}% — ${alternative.rationale.take(52)}",
+                ) { vm.chooseAmbiguityAlternative(index) }
+            }
+            BoardButton("Close lens", onClick = vm::closeAmbiguityLens)
+        }
     }
 }
 
@@ -1416,10 +2315,17 @@ private fun ShapeSuggestionCard(vm: SmartBoardViewModel, modifier: Modifier = Mo
 }
 
 @Composable
-private fun RecognitionPanel(vm: SmartBoardViewModel, modifier: Modifier) {
+private fun RecognitionPanel(
+    vm: SmartBoardViewModel,
+    modifier: Modifier,
+    scrollable: Boolean = true,
+) {
     val review = vm.recognitionReview ?: return
+    val panelModifier = modifier.background(BoardPanel).let {
+        if (scrollable) it.verticalScroll(rememberScrollState()) else it
+    }
     Column(
-        modifier.background(BoardPanel).verticalScroll(rememberScrollState()).padding(14.dp),
+        panelModifier.padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text("Recognition Review", color = BoardInk, fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -1504,6 +2410,9 @@ private fun RecognitionPanel(vm: SmartBoardViewModel, modifier: Modifier) {
         }
         review.result.warnings.forEach { Text("• $it", color = BoardWarning, fontSize = 11.sp) }
         review.validationMessage?.let { Text(it, color = Color(0xFFFF718A)) }
+        BoardButton("Teach this handwriting") {
+            vm.teachCurrentCanvasExample(review.editableLatex)
+        }
         SettingSwitch("Hide source handwriting after insertion", review.hideSourceHandwriting, vm::setHideSourceHandwriting)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             BoardButton(
@@ -1736,6 +2645,9 @@ private fun IntelligencePanel(
             BoardButton(if (vm.intelligenceBusy) "Analyzing…" else "Understand", enabled = !vm.intelligenceBusy) {
                 vm.refreshIntelligence(command.takeIf(String::isNotBlank), explicit = true)
             }
+            BoardButton("Run canvas command", enabled = command.isNotBlank()) {
+                vm.runCanvasCommand(command)
+            }
             BoardButton("Plan workflow", enabled = command.isNotBlank() && !vm.intelligenceBusy) {
                 vm.planIntelligenceWorkflow(command)
             }
@@ -1960,16 +2872,28 @@ private fun ToolButton(
     selected: Boolean = false,
     enabled: Boolean = true,
     warning: Boolean = false,
+    shortcut: String = "",
     onClick: () -> Unit,
 ) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(10.dp)
     Button(
         onClick,
-        Modifier.size(width = 74.dp, height = 48.dp).semantics {
-            this.selected = selected
-            contentDescription = "$label tool${if (selected) ", selected" else ""}"
-        },
+        Modifier
+            .size(width = 74.dp, height = 48.dp)
+            .onFocusChanged { focused = it.isFocused }
+            .border(
+                width = if (focused) 3.dp else if (selected) 2.dp else 0.dp,
+                color = if (focused) Color.White else BoardCyan,
+                shape = shape,
+            )
+            .semantics {
+                this.selected = selected
+                contentDescription = "$label tool${if (selected) ", selected" else ""}" +
+                    if (shortcut.isNotBlank()) ", keyboard shortcut $shortcut" else ""
+            },
         enabled = enabled,
-        shape = RoundedCornerShape(10.dp),
+        shape = shape,
         colors = ButtonDefaults.buttonColors(
             containerColor = when {
                 selected -> BoardCyan
@@ -1982,28 +2906,44 @@ private fun ToolButton(
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(1.dp)) {
             icon?.let { Text(it, fontSize = 13.sp, maxLines = 1) }
-            Text(label, fontSize = 9.sp, maxLines = 1)
+            Text(
+                if (selected && shortcut.isNotBlank()) "$label · $shortcut" else label,
+                fontSize = 9.sp,
+                maxLines = 1,
+            )
         }
     }
 }
 
 @Composable
 private fun BoardButton(label: String, enabled: Boolean = true, warning: Boolean = false, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(10.dp)
     Button(
         onClick,
         enabled = enabled,
-        modifier = Modifier.heightIn(min = 44.dp).semantics { contentDescription = label },
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .onFocusChanged { focused = it.isFocused }
+            .border(if (focused) 3.dp else 0.dp, Color.White, shape)
+            .semantics { contentDescription = label },
+        shape = shape,
         colors = ButtonDefaults.buttonColors(containerColor = if (warning) Color(0xFF6B2A3B) else Color(0xFF24364A), contentColor = BoardInk),
     ) { Text(label, fontSize = 11.sp) }
 }
 
 @Composable
 private fun ShareButton(onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(10.dp)
     Button(
         onClick = onClick,
         modifier = Modifier
-            .heightIn(min = 44.dp)
+            .heightIn(min = 48.dp)
+            .onFocusChanged { focused = it.isFocused }
+            .border(if (focused) 3.dp else 0.dp, Color.White, shape)
             .semantics { contentDescription = "Share app" },
+        shape = shape,
         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF24364A), contentColor = BoardInk),
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
     ) {

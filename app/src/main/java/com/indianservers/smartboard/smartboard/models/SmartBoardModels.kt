@@ -471,11 +471,14 @@ data class GraphConfigurationElement(
     override val bounds: SmartBoardBounds,
     override val createdAt: Long,
     override val hidden: Boolean = false,
+    val parameterValues: Map<String, Double> = emptyMap(),
 ) : SmartBoardElement {
     init {
         require(id.isNotBlank() && expressions.isNotEmpty())
         require(expressions.size <= 32 && expressions.all { it.length <= 4_000 })
         require(moduleRoute.isNotBlank())
+        require(parameterValues.size <= 32)
+        require(parameterValues.all { (name, value) -> name.matches(Regex("[A-Za-z][A-Za-z0-9_]{0,31}")) && value.isFinite() })
     }
 }
 

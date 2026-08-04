@@ -39,6 +39,9 @@ import com.indianservers.smartboard.smartboard.models.StrokeElement
 import com.indianservers.smartboard.smartboard.models.StrokePoint
 import com.indianservers.smartboard.smartboard.models.StrokeTool
 import com.indianservers.smartboard.smartboard.recognition.SafeLatexPreview
+import com.indianservers.smartboard.smartboard.recognition.CanvasObjectHypothesis
+import com.indianservers.smartboard.smartboard.recognition.CanvasUncertaintyRegion
+import com.indianservers.smartboard.smartboard.intelligence.CanvasSpatialHint
 import java.util.UUID
 import kotlin.math.abs
 
@@ -65,12 +68,32 @@ class SmartBoardCanvasView(context: Context) : View(context) {
     var preferences: SmartBoardPreferences = SmartBoardPreferences()
     var strokeStyle: SmartBoardStrokeStyle = SmartBoardStrokeStyle()
     var eraserRadius: Float = 18f
+    var uncertaintyRegions: List<CanvasUncertaintyRegion> = emptyList()
+        set(value) {
+            field = value
+            invalidate()
+        }
+    var ghostCompletion: CanvasObjectHypothesis? = null
+        set(value) {
+            field = value
+            invalidate()
+        }
+    var spatialHint: CanvasSpatialHint? = null
+        set(value) {
+            field = value
+            invalidate()
+        }
+    var ambiguityLensEnabled: Boolean = false
+    var semanticLassoEnabled: Boolean = true
     var onStrokeCommitted: (StrokeElement) -> Unit = {}
     var onSelectionChanged: (Set<String>) -> Unit = {}
+    var onSemanticLasso: (Set<String>, SmartBoardBounds) -> Unit = { ids, _ -> onSelectionChanged(ids) }
     var onErase: (SmartBoardPoint, Float) -> Unit = { _, _ -> }
     var onMoveSelection: (SmartBoardPoint) -> Unit = {}
+    var onSnapSelection: (Set<String>, SmartBoardPoint) -> SmartBoardPoint = { _, delta -> delta }
     var onViewportChanged: (SmartBoardViewport) -> Unit = {}
     var onInteractionAnnouncement: (String) -> Unit = {}
+    var onUncertaintyTapped: (String) -> Unit = {}
 
     private val densityValue get() = resources.displayMetrics.density.coerceAtLeast(.5f)
     private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -85,6 +108,21 @@ class SmartBoardCanvasView(context: Context) : View(context) {
         strokeWidth = 1.6f
         pathEffect = DashPathEffect(floatArrayOf(6f, 4f), 0f)
     }
+    private val uncertaintyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(255, 174, 66)
+        style = Paint.Style.STROKE
+        strokeWidth = 7f
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+    private val ghostPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(67, 217, 245)
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
+        pathEffect = DashPathEffect(floatArrayOf(7f, 5f), 0f)
+        alpha = 90
+    }
+    private val hintPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val mathPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         textSize = 22f
@@ -110,6 +148,7 @@ class SmartBoardCanvasView(context: Context) : View(context) {
     private var activeStylusPointerId = MotionEvent.INVALID_POINTER_ID
     private var hoverPoint: SmartBoardPoint? = null
     private var selectionMoveDelta = SmartBoardPoint(0f, 0f)
+    private var ambiguityTapConsumed = false
 
     private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(detector: ScaleGestureDetector): Boolean {
@@ -186,6 +225,9 @@ class SmartBoardCanvasView(context: Context) : View(context) {
                 canvas.restore()
             }
         }
+        drawConfidenceHeatmap(canvas)
+        drawGhostCompletion(canvas)
+        drawSpatialHint(canvas)
         drawActiveStroke(canvas)
         drawSelection(canvas)
         canvas.restore()
@@ -213,6 +255,21 @@ class SmartBoardCanvasView(context: Context) : View(context) {
             return true
         }
         if (likelyPalm(event, index, stylus)) return true
+        if (event.actionMasked == MotionEvent.ACTION_DOWN && ambiguityLensEnabled) {
+            val region = uncertaintyRegions.lastOrNull { it.bounds.expand(8f).contains(documentPoint) }
+            if (region != null) {
+                ambiguityTapConsumed = true
+                onUncertaintyTapped(region.id)
+                performClick()
+                return true
+            }
+        }
+        if (ambiguityTapConsumed) {
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                ambiguityTapConsumed = false
+            }
+            return true
+        }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 requestFocus()
@@ -282,7 +339,9 @@ class SmartBoardCanvasView(context: Context) : View(context) {
                     }
                     panning -> panning = false
                     movingSelection -> {
-                        if (abs(selectionMoveDelta.x) + abs(selectionMoveDelta.y) > .5f) onMoveSelection(selectionMoveDelta)
+                        if (abs(selectionMoveDelta.x) + abs(selectionMoveDelta.y) > .5f) {
+                            onMoveSelection(onSnapSelection(selectedIds, selectionMoveDelta))
+                        }
                         selectionMoveDelta = SmartBoardPoint(0f, 0f)
                         movingSelection = false
                     }
@@ -399,7 +458,12 @@ class SmartBoardCanvasView(context: Context) : View(context) {
         } else {
             SmartBoardSelection.lasso(document.elements, selectionPath + point)
         }
-        onSelectionChanged(SmartBoardSelection.groupedSelection(selected, document.relationships))
+        val grouped = SmartBoardSelection.groupedSelection(selected, document.relationships)
+        if (activeTool == SmartBoardTool.LASSO && semanticLassoEnabled && movement >= 6f / document.viewport.zoom) {
+            onSemanticLasso(grouped, SmartBoardBounds.from(selectionPath + point))
+        } else {
+            onSelectionChanged(grouped)
+        }
         selectionStart = null
         selectionPath.clear()
         invalidate()
@@ -467,6 +531,37 @@ class SmartBoardCanvasView(context: Context) : View(context) {
         }
     }
 
+    private fun drawSpatialHint(canvas: Canvas) {
+        val hint = spatialHint ?: return
+        val left = hint.anchorBounds.right + 10f
+        val top = hint.anchorBounds.top
+        val width = 230f
+        val height = 58f
+        hintPaint.style = Paint.Style.FILL
+        hintPaint.color = if (hint.warning) Color.rgb(92, 38, 48) else Color.rgb(25, 67, 78)
+        hintPaint.alpha = 238
+        canvas.drawRoundRect(left, top, left + width, top + height, 10f, 10f, hintPaint)
+        hintPaint.style = Paint.Style.STROKE
+        hintPaint.strokeWidth = 1.5f
+        hintPaint.color = if (hint.warning) Color.rgb(255, 120, 140) else Color.rgb(67, 217, 245)
+        canvas.drawRoundRect(left, top, left + width, top + height, 10f, 10f, hintPaint)
+        hintPaint.style = Paint.Style.FILL
+        hintPaint.color = Color.WHITE
+        hintPaint.textSize = 10f
+        val words = hint.text.split(' ')
+        var line = ""
+        var y = top + 18f
+        words.forEach { word ->
+            val candidate = if (line.isBlank()) word else "$line $word"
+            if (hintPaint.measureText(candidate) > width - 16f && line.isNotBlank()) {
+                canvas.drawText(line, left + 8f, y, hintPaint)
+                line = word
+                y += 14f
+            } else line = candidate
+        }
+        if (line.isNotBlank() && y <= top + height - 4f) canvas.drawText(line, left + 8f, y, hintPaint)
+    }
+
     private fun drawShape(canvas: Canvas, element: ShapeElement) {
         strokePaint.style = Paint.Style.STROKE
         strokePaint.color = element.argbColor.toInt()
@@ -506,6 +601,53 @@ class SmartBoardCanvasView(context: Context) : View(context) {
             canvas.drawPath(path, fillPaint)
         }
         canvas.drawPath(path, strokePaint)
+    }
+
+    private fun drawConfidenceHeatmap(canvas: Canvas) {
+        if (uncertaintyRegions.isEmpty()) return
+        val strokes = document.elements.filterIsInstance<StrokeElement>().associateBy(StrokeElement::id)
+        uncertaintyRegions.forEach { region ->
+            val uncertainty = (1f - region.confidence).coerceIn(.18f, .72f)
+            uncertaintyPaint.alpha = (uncertainty * 155f).toInt().coerceIn(28, 112)
+            uncertaintyPaint.strokeWidth = 5f + uncertainty * 7f
+            region.strokeIds.forEach { id ->
+                strokes[id]?.let { stroke ->
+                    val path = Path().apply {
+                        moveTo(stroke.points.first().x, stroke.points.first().y)
+                        stroke.points.drop(1).forEach { lineTo(it.x, it.y) }
+                    }
+                    canvas.drawPath(path, uncertaintyPaint)
+                }
+            }
+        }
+    }
+
+    private fun drawGhostCompletion(canvas: Canvas) {
+        val hypothesis = ghostCompletion ?: return
+        val points = hypothesis.completionPoints
+        if (points.size < 2) return
+        ghostPaint.alpha = (45 + hypothesis.confidence * 75f).toInt().coerceIn(45, 120)
+        val pairwise = hypothesis.shapeType in setOf(
+            SmartBoardShapeType.CUBE,
+            SmartBoardShapeType.CUBOID,
+            SmartBoardShapeType.CYLINDER,
+            SmartBoardShapeType.CONE,
+            SmartBoardShapeType.SPHERE,
+            SmartBoardShapeType.PYRAMID,
+            SmartBoardShapeType.COORDINATE_AXES,
+            SmartBoardShapeType.GRAPH_GRID,
+        )
+        val path = Path()
+        if (pairwise) {
+            points.chunked(2).filter { it.size == 2 }.forEach { pair ->
+                path.moveTo(pair[0].x, pair[0].y)
+                path.lineTo(pair[1].x, pair[1].y)
+            }
+        } else {
+            path.moveTo(points.first().x, points.first().y)
+            points.drop(1).forEach { path.lineTo(it.x, it.y) }
+        }
+        canvas.drawPath(path, ghostPaint)
     }
 
     private fun drawStroke(canvas: Canvas, stroke: StrokeElement) {

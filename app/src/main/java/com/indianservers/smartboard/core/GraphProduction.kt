@@ -30,8 +30,9 @@ data class TypedGraphSample(
 
 object TypedGraphExpressionParser {
     private val reserved = setOf(
-        "x", "y", "t", "theta", "pi", "e", "sin", "cos", "tan", "asin", "acos", "atan",
-        "sqrt", "abs", "ln", "log", "exp", "min", "max", "floor", "ceil", "piecewise",
+        "x", "y", "t", "theta", "pi", "e", "sin", "cos", "tan", "sec", "csc", "cot",
+        "sinh", "cosh", "tanh", "asin", "acos", "atan", "sqrt", "abs", "ln", "log",
+        "exp", "min", "max", "floor", "ceil", "sign", "piecewise",
     )
 
     fun parse(source: String): TypedGraphExpression {

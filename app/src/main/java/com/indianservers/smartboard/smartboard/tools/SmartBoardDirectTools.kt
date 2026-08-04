@@ -16,11 +16,17 @@ import java.util.UUID
 
 enum class SemanticToolOperation { SIMPLIFY, EXPAND, FACTOR, NEGATE }
 
+enum class SemanticComponentRole {
+    EXPRESSION, LEFT_SIDE, RIGHT_SIDE, NUMERATOR, DENOMINATOR, EXPONENT, BASE,
+    MATRIX_ROW, MATRIX_CELL, TERM, FACTOR, FUNCTION_ARGUMENT, PIECEWISE_BRANCH, VARIABLE, NUMBER,
+}
+
 data class SemanticToolTarget(
     val nodeId: String,
     val expression: String,
     val spokenForm: String,
     val depth: Int,
+    val role: SemanticComponentRole = SemanticComponentRole.EXPRESSION,
 )
 
 data class SemanticToolResult(
@@ -39,14 +45,47 @@ object SmartBoardSemanticToolEngine {
     fun targets(tree: SemanticExpressionTree, maximum: Int = 40): List<SemanticToolTarget> {
         require(maximum in 1..256)
         val result = mutableListOf<SemanticToolTarget>()
-        fun visit(node: SemanticMathNode, depth: Int) {
+        fun visit(
+            node: SemanticMathNode,
+            depth: Int,
+            role: SemanticComponentRole,
+        ) {
             if (result.size >= maximum) return
-            result += SemanticToolTarget(node.id, render(node), node.spokenForm, depth)
-            node.children.forEach { visit(it, depth + 1) }
+            result += SemanticToolTarget(node.id, render(node), node.spokenForm, depth, role)
+            val denominatorProduct = node.kind == SemanticMathNodeKind.PRODUCT &&
+                node.children.any(::isReciprocal)
+            node.children.forEachIndexed { index, child ->
+                val childRole = when {
+                    node.kind in setOf(SemanticMathNodeKind.EQUATION, SemanticMathNodeKind.INEQUALITY) && index == 0 ->
+                        SemanticComponentRole.LEFT_SIDE
+                    node.kind in setOf(SemanticMathNodeKind.EQUATION, SemanticMathNodeKind.INEQUALITY) ->
+                        SemanticComponentRole.RIGHT_SIDE
+                    node.kind == SemanticMathNodeKind.POWER && index == 0 && isReciprocal(node) ->
+                        SemanticComponentRole.DENOMINATOR
+                    node.kind == SemanticMathNodeKind.POWER && index == 0 -> SemanticComponentRole.BASE
+                    node.kind == SemanticMathNodeKind.POWER && index == 1 -> SemanticComponentRole.EXPONENT
+                    node.kind == SemanticMathNodeKind.MATRIX -> SemanticComponentRole.MATRIX_ROW
+                    node.kind == SemanticMathNodeKind.MATRIX_ROW -> SemanticComponentRole.MATRIX_CELL
+                    node.kind == SemanticMathNodeKind.SUM -> SemanticComponentRole.TERM
+                    node.kind == SemanticMathNodeKind.PRODUCT && isReciprocal(child) -> SemanticComponentRole.DENOMINATOR
+                    node.kind == SemanticMathNodeKind.PRODUCT && denominatorProduct -> SemanticComponentRole.NUMERATOR
+                    node.kind == SemanticMathNodeKind.PRODUCT -> SemanticComponentRole.FACTOR
+                    node.kind == SemanticMathNodeKind.FUNCTION -> SemanticComponentRole.FUNCTION_ARGUMENT
+                    node.kind == SemanticMathNodeKind.PIECEWISE -> SemanticComponentRole.PIECEWISE_BRANCH
+                    child.kind == SemanticMathNodeKind.VARIABLE -> SemanticComponentRole.VARIABLE
+                    child.kind == SemanticMathNodeKind.NUMBER -> SemanticComponentRole.NUMBER
+                    else -> SemanticComponentRole.EXPRESSION
+                }
+                visit(child, depth + 1, childRole)
+            }
         }
-        visit(tree.root, 0)
+        visit(tree.root, 0, SemanticComponentRole.EXPRESSION)
         return result
     }
+
+    private fun isReciprocal(node: SemanticMathNode): Boolean =
+        node.kind == SemanticMathNodeKind.POWER &&
+            node.children.getOrNull(1)?.value?.toDoubleOrNull()?.let { it < 0.0 } == true
 
     fun apply(
         tree: SemanticExpressionTree,

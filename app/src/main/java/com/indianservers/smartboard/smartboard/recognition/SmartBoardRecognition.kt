@@ -31,7 +31,7 @@ data class MathRecognitionInput(
 )
 
 data class MathRecognitionOptions(
-    val languageTag: String = "en-IN",
+    val languageTag: String = "en-US",
     val maximumAlternatives: Int = 6,
     val preferLatex: Boolean = true,
 )
@@ -150,7 +150,9 @@ class MlKitMathRecognitionAdapter : MathHandwritingRecognitionProvider {
                         finish()
                         return@recognize
                     }
-                    val candidates = recognized.candidates.take(options.maximumAlternatives)
+                    val candidates = recognized.candidates
+                        .distinct()
+                        .take(options.maximumAlternatives)
                     val primary = candidates.first()
                     continuation.resume(
                         MathRecognitionResult(

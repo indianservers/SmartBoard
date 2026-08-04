@@ -78,6 +78,14 @@ class SmartBoardIntegrationAuditTest {
     }
 
     @Test
+    fun latexAdapterConvertsFunctionsThatCarrySubscripts() {
+        assertEquals(
+            "log_a(x/y)=log_a(x)-log_a(y)",
+            SmartBoardLatexAdapter.toEngineExpression("\\log_a(x/y)=\\log_a(x)-\\log_a(y)"),
+        )
+    }
+
+    @Test
     fun graphAdapterUsesTypedGraphAndSurfaceEnginesForEverySupportedFamily() {
         val cases = mapOf(
             "y=a*x^2+b" to SmartBoardGraphKind.EXPLICIT_2D,

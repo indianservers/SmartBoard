@@ -75,6 +75,7 @@ import com.indianservers.smartboard.smartboard.models.TableElement
 import com.indianservers.smartboard.smartboard.models.TextElement
 import com.indianservers.smartboard.smartboard.models.SmartBoardShapeType
 import com.indianservers.smartboard.smartboard.shapes.AutoShapeSuggestion
+import com.indianservers.smartboard.smartboard.shapes.AutoShapeCandidate
 import com.indianservers.smartboard.smartboard.shapes.DeterministicAutoShapeRecognizer
 import com.indianservers.smartboard.smartboard.shapes.SmartBoardStrokeGrouper
 import com.indianservers.smartboard.smartboard.persistence.SmartBoardRepository
@@ -112,6 +113,11 @@ import com.indianservers.smartboard.smartboard.recognition.RecognitionPersonaliz
 import com.indianservers.smartboard.smartboard.recognition.RecognitionRerankEvidence
 import com.indianservers.smartboard.smartboard.recognition.SmartBoardContextualRecognitionReranker
 import com.indianservers.smartboard.smartboard.recognition.SmartBoardRecognitionPersonalizer
+import com.indianservers.smartboard.smartboard.recognition.CanvasTeachingProfile
+import com.indianservers.smartboard.smartboard.recognition.CanvasTeachingProfileCodec
+import com.indianservers.smartboard.smartboard.recognition.CanvasUncertaintyRegion
+import com.indianservers.smartboard.smartboard.recognition.SmartBoardCanvasIntelligenceEngine
+import com.indianservers.smartboard.smartboard.recognition.SmartBoardCanvasIntelligenceSnapshot
 import com.indianservers.smartboard.smartboard.models.SemanticExpressionTree
 import com.indianservers.smartboard.smartboard.integration.SmartBoardCasAdapter
 import com.indianservers.smartboard.smartboard.integration.SmartBoardExpressionAnalysis
@@ -163,6 +169,17 @@ import com.indianservers.smartboard.smartboard.intelligence.SmartBoardWorkflowPl
 import com.indianservers.smartboard.smartboard.intelligence.SmartBoardWorkflowRequest
 import com.indianservers.smartboard.smartboard.intelligence.SmartBoardWorkflowStepRequest
 import com.indianservers.smartboard.smartboard.intelligence.WorkflowStepStatus
+import com.indianservers.smartboard.smartboard.intelligence.SemanticCanvasSearchResult
+import com.indianservers.smartboard.smartboard.intelligence.SemanticCanvasSnapshot
+import com.indianservers.smartboard.smartboard.intelligence.SmartBoardSemanticCanvasEngine
+import com.indianservers.smartboard.smartboard.intelligence.CanvasSpatialHint
+import com.indianservers.smartboard.smartboard.intelligence.EquivalentExpressionResult
+import com.indianservers.smartboard.smartboard.intelligence.GraphFromInkSuggestion
+import com.indianservers.smartboard.smartboard.intelligence.LocalizedMathMistake
+import com.indianservers.smartboard.smartboard.intelligence.SmartBoardMathGraphIntelligenceEngine
+import com.indianservers.smartboard.smartboard.intelligence.CanvasCommandKind
+import com.indianservers.smartboard.smartboard.intelligence.ParsedCanvasCommand
+import com.indianservers.smartboard.smartboard.intelligence.SmartBoardCanvasCommandEngine
 import com.indianservers.smartboard.smartboard.multisubject.DefaultSmartBoardRecognitionOrchestrator
 import com.indianservers.smartboard.smartboard.multisubject.BoundedLocalSmartBoardMultiSubjectAnalytics
 import com.indianservers.smartboard.smartboard.multisubject.DefaultSmartBoardSubjectCapabilityRegistry
@@ -290,6 +307,9 @@ class SmartBoardViewModel(
     private val imageAssets by lazy { SmartBoardImageAssetStore(application) }
     private val exporter by lazy { SmartBoardExporter(application) }
     private val autoShapeRecognizer by lazy { DeterministicAutoShapeRecognizer() }
+    private val canvasIntelligenceEngine by lazy { SmartBoardCanvasIntelligenceEngine(autoShapeRecognizer) }
+    private val semanticCanvasEngine by lazy { SmartBoardSemanticCanvasEngine() }
+    private val mathGraphIntelligence by lazy { SmartBoardMathGraphIntelligenceEngine() }
     private val tutor by lazy { SmartBoardTutorEngine() }
     private val unifiedTutor by lazy { DefaultUnifiedSmartBoardTutor() }
     private val tutorContextBuilder = SmartBoardTutorContextBuilder()
@@ -299,6 +319,9 @@ class SmartBoardViewModel(
     private var automaticRecognitionJob: Job? = null
     private var streamingRecognitionJob: Job? = null
     private var autoShapeJob: Job? = null
+    private var canvasIntelligenceJob: Job? = null
+    private var semanticCanvasJob: Job? = null
+    private var mathGraphIntelligenceJob: Job? = null
     private var intelligenceJob: Job? = null
     private var tutorJob: Job? = null
     private var classroomTimerJob: Job? = null
@@ -327,6 +350,32 @@ class SmartBoardViewModel(
     var pendingGraphLaunch by mutableStateOf<SmartBoardGraphLaunch?>(null)
         private set
     var shapeSuggestion by mutableStateOf<AutoShapeSuggestion?>(null)
+        private set
+    var canvasIntelligence by mutableStateOf(SmartBoardCanvasIntelligenceSnapshot.Empty)
+        private set
+    var activeAmbiguityRegion by mutableStateOf<CanvasUncertaintyRegion?>(null)
+        private set
+    var ambiguityLensEnabled by mutableStateOf(false)
+        private set
+    var canvasTeachingProfile by mutableStateOf(CanvasTeachingProfile.Empty)
+        private set
+    var semanticCanvas by mutableStateOf(SemanticCanvasSnapshot.Empty)
+        private set
+    var semanticSearchResults by mutableStateOf<List<SemanticCanvasSearchResult>>(emptyList())
+        private set
+    var semanticLassoEnabled by mutableStateOf(true)
+        private set
+    var graphFromInkSuggestion by mutableStateOf<GraphFromInkSuggestion?>(null)
+        private set
+    var equivalentExpressionResult by mutableStateOf<EquivalentExpressionResult?>(null)
+        private set
+    var localizedMathMistake by mutableStateOf<LocalizedMathMistake?>(null)
+        private set
+    var spatialMathHint by mutableStateOf<CanvasSpatialHint?>(null)
+        private set
+    var pendingCanvasCommand by mutableStateOf<ParsedCanvasCommand?>(null)
+        private set
+    var lastCanvasCommand by mutableStateOf<ParsedCanvasCommand?>(null)
         private set
     var streamingRecognitionSuggestion by mutableStateOf<SmartBoardStreamingRecognitionSuggestion?>(null)
         private set
@@ -402,6 +451,8 @@ class SmartBoardViewModel(
     val recognitionRuntimeHealth get() = recognitionDiagnostics.health()
     val semanticToolTargets: List<SemanticToolTarget>
         get() = selectedExpression?.semanticTree?.let(SmartBoardSemanticToolEngine::targets).orEmpty()
+    val selectedGraphParameters
+        get() = selectedGraph?.expressions?.firstOrNull()?.let(mathGraphIntelligence::discoverParameters).orEmpty()
 
     init {
         viewModelScope.launch {
@@ -409,6 +460,9 @@ class SmartBoardViewModel(
             recognitionPersonalizationProfile = runCatching {
                 RecognitionPersonalizationProfileCodec.decode(repository.loadRecognitionPersonalization())
             }.getOrDefault(RecognitionPersonalizationProfile.Empty)
+            canvasTeachingProfile = runCatching {
+                CanvasTeachingProfileCodec.decode(repository.loadCanvasTeachingProfile())
+            }.getOrDefault(CanvasTeachingProfile.Empty)
             recentBoards = runCatching { repository.recent() }.getOrDefault(emptyList())
             val requestedId = savedStateHandle.get<String>("smartBoardDocumentId")
             val restored = requestedId?.let { runCatching { repository.load(it) }.getOrNull() }
@@ -423,6 +477,8 @@ class SmartBoardViewModel(
             savedStateHandle["smartBoardDocumentId"] = document.id
             initialized = true
             status = if (restored == null) "New Mathematics board" else "Recovered ${document.title}"
+            refreshSemanticCanvas()
+            scheduleMathGraphIntelligence()
             if (preferences.intelligenceMode != com.indianservers.smartboard.smartboard.models.SmartBoardIntelligenceMode.MANUAL) {
                 refreshIntelligence()
             }
@@ -481,6 +537,128 @@ class SmartBoardViewModel(
                 status = "${operation.name.lowercase()} applied directly; Undo restores the expression"
             }
             .onFailure { status = SmartBoardSecurityPolicy.safeError(it) }
+    }
+
+    fun replaceSemanticComponent(nodeId: String, replacement: String) {
+        val expression = selectedExpression ?: return
+        val tree = expression.semanticTree ?: return
+        SmartBoardSemanticToolEngine.replace(tree, nodeId, replacement)
+            .onSuccess { result ->
+                execute(
+                    EditMathExpressionCommand(
+                        expression,
+                        expression.copy(
+                            correctedLatex = result.expressionAfter,
+                            normalizedExpression = result.expressionAfter,
+                            semanticTree = result.tree,
+                        ),
+                    ),
+                )
+                selectedSemanticNodeId = null
+                status = "Semantic component updated; the rest of the equation was preserved"
+            }
+            .onFailure { status = SmartBoardSecurityPolicy.safeError(it) }
+    }
+
+    fun checkEquivalentExpression(candidate: String) {
+        val source = selectedExpression?.let { it.normalizedExpression ?: it.displayLatex } ?: return
+        equivalentExpressionResult = mathGraphIntelligence.equivalent(source, candidate)
+        status = when {
+            equivalentExpressionResult?.equivalent == true -> "Expressions are mathematically equivalent"
+            else -> "Expressions are not proven equivalent"
+        }
+    }
+
+    fun clearEquivalentExpressionResult() {
+        equivalentExpressionResult = null
+    }
+
+    fun analyzeGraphInk() {
+        mathGraphIntelligenceJob?.cancel()
+        mathGraphIntelligenceJob = viewModelScope.launch {
+            val strokes = document.elements.filterIsInstance<StrokeElement>()
+            val shapes = document.elements.filterIsInstance<ShapeElement>()
+            val expressions = document.elements.filterIsInstance<MathExpressionElement>().filterNot(MathExpressionElement::hidden)
+            graphFromInkSuggestion = withContext(Dispatchers.Default) {
+                mathGraphIntelligence.analyzeInk(strokes, shapes, expressions, now())
+            }
+            status = if (graphFromInkSuggestion == null) {
+                "No graphable equation or curve was found"
+            } else {
+                "Editable graph candidates are ready; source ink is unchanged"
+            }
+        }
+    }
+
+    fun chooseInkGraphCandidate(index: Int) {
+        val suggestion = graphFromInkSuggestion ?: return
+        val candidate = suggestion.candidates.getOrNull(index) ?: return
+        val prepared = SmartBoardGraphAdapter.prepare(candidate.expression).getOrElse {
+            status = SmartBoardSecurityPolicy.safeError(it)
+            return
+        }
+        val graph = GraphConfigurationElement(
+            id = "ink-graph-${UUID.randomUUID()}",
+            graphKind = prepared.kind,
+            expressions = listOf(prepared.expression),
+            sourceElementIds = (suggestion.sourceStrokeIds + suggestion.axisElementIds).toList(),
+            moduleRoute = prepared.route,
+            bounds = suggestion.bounds.takeUnless { it == SmartBoardBounds.Empty }
+                ?: insertionBounds(360f, 220f),
+            createdAt = now(),
+            parameterValues = mathGraphIntelligence.discoverParameters(prepared.expression)
+                .associate { it.symbol to it.initial },
+        )
+        execute(AddElementCommand(graph))
+        selectedIds = setOf(graph.id)
+        graphFromInkSuggestion = null
+        status = "${candidate.family.replaceFirstChar(Char::titlecase)} converted to an editable graph; ink preserved"
+    }
+
+    fun dismissGraphFromInkSuggestion() {
+        graphFromInkSuggestion = null
+        status = "Graph candidates dismissed; source ink preserved"
+    }
+
+    fun updateGraphParameter(symbol: String, value: Double) {
+        val graph = selectedGraph ?: return
+        if (symbol !in graph.parameterValues || !value.isFinite()) return
+        execute(
+            ReplaceElementCommand(
+                graph,
+                graph.copy(parameterValues = graph.parameterValues + (symbol to value)),
+                "Adjust graph parameter",
+            ),
+        )
+        status = "Graph parameter $symbol = ${"%.2f".format(value)}"
+    }
+
+    fun showSpatialNextStepHint() {
+        val expression = selectedExpression ?: document.elements.filterIsInstance<MathExpressionElement>()
+            .filterNot(MathExpressionElement::hidden).maxByOrNull(MathExpressionElement::createdAt)
+            ?: run {
+                status = "Select an equation for an inline hint"
+                return
+            }
+        spatialMathHint = mathGraphIntelligence.nextStepHint(expression)
+        status = "Hint placed beside the relevant line"
+    }
+
+    fun localizeMathMistake() {
+        val selectedLines = selectedElements.filterIsInstance<MathExpressionElement>()
+        val lines = selectedLines.takeIf { it.size >= 2 }
+            ?: document.elements.filterIsInstance<MathExpressionElement>().filterNot(MathExpressionElement::hidden)
+        val mistake = mathGraphIntelligence.localizeMistake(lines)
+        localizedMathMistake = mistake
+        spatialMathHint = mistake?.let {
+            mathGraphIntelligence.mistakeHint(it, lines.mapTo(linkedSetOf(), MathExpressionElement::id))
+        }
+        status = if (mistake == null) "No invalid supported transformation was found" else
+            "First invalid transformation localized at line ${mistake.invalidStepIndex + 1}"
+    }
+
+    fun dismissSpatialMathHint() {
+        spatialMathHint = null
     }
 
     fun reconstructSelectedTable() {
@@ -627,6 +805,88 @@ class SmartBoardViewModel(
         refreshTutorContext()
     }
 
+    fun selectByMeaning(query: String) {
+        val ids = semanticCanvasEngine.selectByMeaning(semanticCanvas, document.id, query, selectedIds)
+            .filterTo(linkedSetOf()) { candidate -> document.elements.any { it.id == candidate && !it.hidden } }
+        selectedIds = ids
+        selectedSemanticNodeId = null
+        status = if (ids.isEmpty()) "No canvas objects matched “${query.take(40)}”" else
+            "Meaning selection matched ${ids.size} related object(s)"
+    }
+
+    fun semanticLasso(ids: Set<String>, bounds: SmartBoardBounds) {
+        val meaningful = semanticCanvasEngine.semanticLasso(semanticCanvas, document.id, ids, bounds)
+            .filterTo(linkedSetOf()) { candidate -> document.elements.any { it.id == candidate && !it.hidden } }
+        select(meaningful.ifEmpty { ids })
+        status = "${selectedIds.size} meaningful object(s) selected by semantic lasso"
+    }
+
+    fun toggleSemanticLasso() {
+        semanticLassoEnabled = !semanticLassoEnabled
+        status = if (semanticLassoEnabled) "Semantic lasso enabled" else "Geometric lasso enabled"
+    }
+
+    fun snapSelection(ids: Set<String>, requested: SmartBoardPoint): SmartBoardPoint {
+        val result = semanticCanvasEngine.snap(semanticCanvas, document.id, ids, requested)
+        if (result.snapped) status = result.rationale ?: "Selection aligned"
+        return result.delta
+    }
+
+    fun searchCanvas(query: String) {
+        semanticSearchResults = semanticCanvasEngine.search(
+            semanticCanvas,
+            (listOf(document) + recentBoards).distinctBy(SmartBoardDocument::id),
+            query,
+        )
+        status = if (semanticSearchResults.isEmpty()) "No semantic canvas matches" else
+            "${semanticSearchResults.size} meaning-based match(es) across ${semanticCanvas.pageCount} board page(s)"
+    }
+
+    fun clearCanvasSearch() {
+        semanticSearchResults = emptyList()
+    }
+
+    fun openSemanticSearchResult(result: SemanticCanvasSearchResult) {
+        if (result.boardId == document.id) {
+            select(result.elementIds)
+            status = "Found ${result.title} on this board"
+        } else {
+            openBoard(result.boardId, result.elementIds)
+        }
+    }
+
+    fun addProposedObjectName(nodeId: String, proposedName: String) {
+        val node = semanticCanvas.nodes.firstOrNull { it.id == nodeId && it.boardId == document.id } ?: return
+        val name = proposedName.trim().take(80)
+        if (name.isBlank()) return
+        val label = TextElement(
+            id = "label-${UUID.randomUUID()}",
+            text = name,
+            bounds = SmartBoardBounds(
+                node.bounds.right + 12f,
+                node.bounds.top,
+                node.bounds.right + 12f + (name.length * 8f).coerceIn(80f, 260f),
+                node.bounds.top + 42f,
+            ),
+            createdAt = now(),
+        )
+        execute(AddElementCommand(label))
+        execute(
+            AddRelationshipsCommand(
+                listOf(
+                    SmartBoardRelationship(
+                        id = "semantic-label-${UUID.randomUUID()}",
+                        type = SmartBoardRelationshipType.LABELS,
+                        elementIds = listOf(label.id) + node.elementIds.filter { id -> document.elements.any { it.id == id } },
+                        createdAt = now(),
+                    ),
+                ),
+            ),
+        )
+        selectedIds = setOf(label.id)
+        status = "Added smart label “$name”"
+    }
+
     fun addStroke(stroke: StrokeElement) {
         automaticRecognitionJob?.cancel()
         streamingRecognitionJob?.cancel()
@@ -637,6 +897,22 @@ class SmartBoardViewModel(
         correctionGestureSuggestion = SmartBoardCorrectionGestureDetector.detect(stroke, existingStrokes)
         selectedIds = emptySet()
         status = if (correctionGestureSuggestion == null) "Stroke added" else "Correction gesture detected; confirm before erasing"
+        canvasIntelligenceJob?.cancel()
+        canvasIntelligenceJob = viewModelScope.launch {
+            delay(650)
+            val current = document.elements.filterIsInstance<StrokeElement>().filterNot(StrokeElement::hidden)
+            canvasIntelligence = withContext(Dispatchers.Default) {
+                canvasIntelligenceEngine.analyze(
+                    current,
+                    document.subjectMode.selection,
+                    canvasTeachingProfile,
+                    now(),
+                )
+            }
+            activeAmbiguityRegion = activeAmbiguityRegion?.let { active ->
+                canvasIntelligence.uncertaintyRegions.firstOrNull { it.id == active.id }
+            }
+        }
         if (preferences.autoShapeEnabled && correctionGestureSuggestion == null) {
             autoShapeJob = viewModelScope.launch {
                 delay(preferences.autoShapeDelayMillis.toLong())
@@ -799,6 +1075,228 @@ class SmartBoardViewModel(
     fun dismissShapeSuggestion() {
         shapeSuggestion = null
         status = "Shape suggestion dismissed; original handwriting kept"
+    }
+
+    fun openAmbiguityRegion(regionId: String) {
+        activeAmbiguityRegion = canvasIntelligence.uncertaintyRegions.firstOrNull { it.id == regionId }
+    }
+
+    fun toggleAmbiguityLens() {
+        ambiguityLensEnabled = !ambiguityLensEnabled
+        status = if (ambiguityLensEnabled) {
+            "Ambiguity Lens active; tap an amber-highlighted stroke"
+        } else {
+            "Ambiguity Lens off"
+        }
+    }
+
+    fun closeAmbiguityLens() {
+        activeAmbiguityRegion = null
+    }
+
+    fun chooseAmbiguityAlternative(index: Int) {
+        val hypothesis = activeAmbiguityRegion?.alternatives?.getOrNull(index) ?: return
+        openHypothesisForReview(hypothesis)
+        activeAmbiguityRegion = null
+    }
+
+    fun chooseCanvasHypothesis(index: Int) {
+        val hypothesis = canvasIntelligence.hypotheses
+            .sortedByDescending { it.confidence }
+            .getOrNull(index) ?: return
+        openHypothesisForReview(hypothesis)
+    }
+
+    private fun openHypothesisForReview(
+        hypothesis: com.indianservers.smartboard.smartboard.recognition.CanvasObjectHypothesis,
+    ) {
+        val type = hypothesis.shapeType ?: run {
+            status = "${hypothesis.label} selected as the preferred interpretation"
+            return
+        }
+        val points = hypothesis.completionPoints.takeIf { it.size >= 2 } ?: return
+        shapeSuggestion = AutoShapeSuggestion(
+            candidates = listOf(
+                AutoShapeCandidate(
+                    type,
+                    points,
+                    SmartBoardBounds.from(points),
+                    hypothesis.confidence,
+                    hypothesis.rationale,
+                    hypothesis.sourceStrokeIds,
+                ),
+            ),
+            createdAt = now(),
+            forced = true,
+        )
+        status = "${hypothesis.label} selected; confirm to replace nothing until accepted"
+    }
+
+    fun reviewGhostCompletion() {
+        val hypothesis = canvasIntelligence.ghostCompletion ?: return
+        val type = hypothesis.shapeType ?: return
+        if (hypothesis.completionPoints.size < 2) return
+        shapeSuggestion = AutoShapeSuggestion(
+            listOf(
+                AutoShapeCandidate(
+                    type,
+                    hypothesis.completionPoints,
+                    SmartBoardBounds.from(hypothesis.completionPoints),
+                    hypothesis.confidence,
+                    hypothesis.rationale,
+                    hypothesis.sourceStrokeIds,
+                ),
+            ),
+            createdAt = now(),
+            forced = true,
+        )
+        status = "Optional ${hypothesis.label} completion opened for confirmation"
+    }
+
+    fun dismissGhostCompletion() {
+        canvasIntelligence = canvasIntelligence.copy(
+            hypotheses = canvasIntelligence.hypotheses.filterNot { it.incomplete },
+        )
+        status = "Incomplete-object suggestion hidden; ink unchanged"
+    }
+
+    fun teachCurrentCanvasExample(label: String) {
+        val trimmed = label.trim()
+        if (trimmed.isBlank()) {
+            status = "Enter a label for this example"
+            return
+        }
+        val sourceIds = shapeSuggestion?.selected?.sourceStrokeIds
+            ?: activeAmbiguityRegion?.strokeIds
+            ?: recognitionReview?.input?.strokeIds
+            ?: canvasIntelligence.hypotheses.maxByOrNull { it.confidence }?.sourceStrokeIds
+            ?: selectedIds.toList()
+        val strokes = document.elements.filterIsInstance<StrokeElement>().filter { it.id in sourceIds }
+        if (strokes.isEmpty()) {
+            status = "Select handwriting or a detected object to teach"
+            return
+        }
+        val shapeType = shapeSuggestion?.selected?.type
+            ?: activeAmbiguityRegion?.alternatives?.firstOrNull()?.shapeType
+            ?: canvasIntelligence.hypotheses.maxByOrNull { it.confidence }?.shapeType
+        canvasTeachingProfile = canvasIntelligenceEngine.teach(
+            canvasTeachingProfile,
+            strokes,
+            trimmed,
+            shapeType,
+            now(),
+        )
+        viewModelScope.launch {
+            repository.saveCanvasTeachingProfile(CanvasTeachingProfileCodec.encode(canvasTeachingProfile))
+        }
+        recognitionReview?.let { review ->
+            recognitionPersonalizationProfile = SmartBoardRecognitionPersonalizer.recordCorrection(
+                recognitionPersonalizationProfile,
+                review.result.latex,
+                trimmed,
+                now(),
+            )
+            viewModelScope.launch {
+                repository.saveRecognitionPersonalization(
+                    RecognitionPersonalizationProfileCodec.encode(recognitionPersonalizationProfile),
+                )
+            }
+        }
+        if (!preferences.recognitionPersonalizationEnabled) {
+            updatePreferences(preferences.copy(recognitionPersonalizationEnabled = true))
+        }
+        refreshCanvasIntelligence()
+        status = "Learned '$trimmed' from ${strokes.size} stroke(s); stored locally"
+    }
+
+    fun setTeachSmartBoardMode(enabled: Boolean) {
+        updatePreferences(preferences.copy(recognitionPersonalizationEnabled = enabled))
+        status = if (enabled) {
+            "Teach SMART Board mode enabled; confirmed corrections and labelled shapes will adapt locally"
+        } else {
+            "Teach SMART Board mode disabled; existing local examples were kept"
+        }
+    }
+
+    fun runCanvasCommand(source: String) {
+        val parsed = SmartBoardCanvasCommandEngine.parse(source)
+        lastCanvasCommand = parsed
+        if (parsed.kind == CanvasCommandKind.UNKNOWN) {
+            status = "Command not understood. Try “select all forces”, “graph this ink”, or “show next-step hint”."
+            return
+        }
+        if (parsed.requiresConfirmation) {
+            pendingCanvasCommand = parsed
+            status = "Confirm: ${parsed.summary}"
+            return
+        }
+        executeCanvasCommand(parsed)
+    }
+
+    fun confirmCanvasCommand() {
+        val command = pendingCanvasCommand ?: return
+        pendingCanvasCommand = null
+        executeCanvasCommand(command)
+    }
+
+    fun cancelCanvasCommand() {
+        pendingCanvasCommand = null
+        status = "Canvas command cancelled"
+    }
+
+    private fun executeCanvasCommand(command: ParsedCanvasCommand) {
+        lastCanvasCommand = command
+        when (command.kind) {
+            CanvasCommandKind.SELECT_BY_MEANING -> selectByMeaning(command.argument.orEmpty())
+            CanvasCommandKind.SEARCH_CANVAS -> searchCanvas(command.argument.orEmpty())
+            CanvasCommandKind.GRAPH_FROM_INK -> analyzeGraphInk()
+            CanvasCommandKind.GRAPH_SELECTED_EQUATION -> {
+                val expression = selectedExpression
+                if (expression == null) status = "Select one equation to graph"
+                else insertOrUpdateGraph(expression.normalizedExpression ?: expression.displayLatex)
+            }
+            CanvasCommandKind.SET_GRAPH_PARAMETER -> {
+                val graph = selectedGraph
+                val symbol = command.argument.orEmpty()
+                val value = command.numericValue
+                if (graph == null || value == null) status = "Select an editable graph first"
+                else if (symbol !in graph.parameterValues) status = "Graph has no parameter named $symbol"
+                else updateGraphParameter(symbol, value)
+            }
+            CanvasCommandKind.SHOW_HINT -> showSpatialNextStepHint()
+            CanvasCommandKind.LOCALIZE_MISTAKE -> localizeMathMistake()
+            CanvasCommandKind.RECOGNIZE -> recognizeSelection()
+            CanvasCommandKind.TEACH_EXAMPLE -> teachCurrentCanvasExample(command.argument.orEmpty())
+            CanvasCommandKind.ENABLE_TEACH_MODE -> setTeachSmartBoardMode(true)
+            CanvasCommandKind.DISABLE_TEACH_MODE -> setTeachSmartBoardMode(false)
+            CanvasCommandKind.CLEAR_BOARD -> clearBoard()
+            CanvasCommandKind.DELETE_SELECTION -> deleteSelection()
+            CanvasCommandKind.UNDO -> undo()
+            CanvasCommandKind.REDO -> redo()
+            CanvasCommandKind.UNKNOWN -> Unit
+        }
+    }
+
+    fun clearCanvasTeachingExamples() {
+        canvasTeachingProfile = CanvasTeachingProfile.Empty
+        viewModelScope.launch { repository.clearCanvasTeachingProfile() }
+        refreshCanvasIntelligence()
+        status = "Canvas teaching examples cleared"
+    }
+
+    private fun refreshCanvasIntelligence() {
+        canvasIntelligenceJob?.cancel()
+        canvasIntelligenceJob = viewModelScope.launch {
+            val strokes = document.elements.filterIsInstance<StrokeElement>().filterNot(StrokeElement::hidden)
+            canvasIntelligence = withContext(Dispatchers.Default) {
+                canvasIntelligenceEngine.analyze(
+                    strokes,
+                    document.subjectMode.selection,
+                    canvasTeachingProfile,
+                    now(),
+                )
+            }
+        }
     }
 
     fun acceptShapeSuggestion() {
@@ -1001,9 +1499,11 @@ class SmartBoardViewModel(
                 document.elementSubjectClassifications,
                 document.elementConcepts,
             ),
-        )
-        selectedIds = emptySet()
-        status = "Board cleared; Undo restores it"
+          )
+          selectedIds = emptySet()
+          canvasIntelligence = SmartBoardCanvasIntelligenceSnapshot.Empty
+          activeAmbiguityRegion = null
+          status = "Board cleared; Undo restores it"
     }
 
     fun undo() {
@@ -1253,6 +1753,9 @@ class SmartBoardViewModel(
         tutorContext = null
         tutorLastResponse = null
         tutorSuggestedPrompts = emptyList()
+        semanticSearchResults = emptyList()
+        refreshSemanticCanvas()
+        scheduleMathGraphIntelligence()
     }
 
     fun setBoardSubject(subject: SmartBoardSubject) {
@@ -1334,7 +1837,7 @@ class SmartBoardViewModel(
         }
     }
 
-    fun openBoard(id: String) {
+    fun openBoard(id: String, selectAfterOpen: Set<String> = emptySet()) {
         viewModelScope.launch {
             status = "Opening board…"
             val loaded = runCatching {
@@ -1353,7 +1856,9 @@ class SmartBoardViewModel(
                 autoShapeJob?.cancel()
                 document = loaded
                 history.clear()
-                selectedIds = emptySet()
+                selectedIds = selectAfterOpen.filterTo(linkedSetOf()) { candidate ->
+                    loaded.elements.any { it.id == candidate && !it.hidden }
+                }
                 recognitionReview = null
                 shapeSuggestion = null
                 streamingRecognitionSuggestion = null
@@ -1374,6 +1879,9 @@ class SmartBoardViewModel(
                 tutorLastResponse = null
                 refreshTutorContext()
                 refreshIntelligence()
+                semanticSearchResults = emptyList()
+                refreshSemanticCanvas()
+                scheduleMathGraphIntelligence()
             }
         }
     }
@@ -1387,7 +1895,12 @@ class SmartBoardViewModel(
         }
     }
 
-    fun recognizeSelection(force: Boolean = false, strokeIds: Set<String>? = null, silent: Boolean = false) {
+    fun recognizeSelection(
+        force: Boolean = false,
+        strokeIds: Set<String>? = null,
+        silent: Boolean = false,
+        openEditableGraph: Boolean = false,
+    ) {
         automaticRecognitionJob?.cancel()
         streamingRecognitionJob?.cancel()
         autoShapeJob?.cancel()
@@ -1445,9 +1958,18 @@ class SmartBoardViewModel(
                 }
             }.onSuccess { unified ->
                 val result = unified.recognition
+                val directGraphCandidate = if (openEditableGraph) {
+                    buildList {
+                        add(result.latex)
+                        result.normalizedExpression?.let(::add)
+                        result.alternatives.forEach { add(it.latex) }
+                    }.distinct().firstOrNull { candidate ->
+                        SmartBoardGraphAdapter.prepare(candidate).isSuccess
+                    }
+                } else null
                 val semanticTree = if (unified.routedSubject == SmartBoardSubject.MATHEMATICS) {
                     SmartBoardSemanticExpressionBuilder.build(
-                        result.latex,
+                        directGraphCandidate ?: result.latex,
                         result.normalizedExpression,
                         draft.strokeIds,
                         result.confidence,
@@ -1457,10 +1979,10 @@ class SmartBoardViewModel(
                 recognitionReview = SmartBoardRecognitionReview(
                     draft.copy(rasterPng = byteArrayOf()),
                     result,
-                    result.latex,
+                    directGraphCandidate ?: result.latex,
                     subjectAnalysis = unified.analysis,
                     subjectDetection = unified.detection,
-                    selectedSubject = unified.routedSubject,
+                    selectedSubject = if (openEditableGraph) SmartBoardSubject.MATHEMATICS else unified.routedSubject,
                     semanticTree = semanticTree,
                     specialistInterpretations = SmartBoardSpecialistRecognitionRegistry.recognize(
                         result.latex,
@@ -1484,10 +2006,15 @@ class SmartBoardViewModel(
                 )
                 if (!silent) {
                     status = when {
+                        openEditableGraph && directGraphCandidate == null ->
+                            "No graphable equation was found; choose or edit the highlighted interpretation"
                         unified.detection.requiresConfirmation -> "Subject confirmation required; handwriting preserved"
                         unified.routedSubject != null -> "Detected subject: ${unified.routedSubject.displayName()}"
                         else -> "Subject unresolved; choose a subject to continue"
                     }
+                }
+                if (openEditableGraph && directGraphCandidate != null) {
+                    confirmRecognition()
                 }
             }.onFailure { error ->
                 if (error is kotlinx.coroutines.CancellationException) return@onFailure
@@ -1495,6 +2022,15 @@ class SmartBoardViewModel(
             }
             recognizing = false
         }
+    }
+
+    fun recognizeEquationAndGraph() {
+        if (document.subjectMode.selection !in setOf(SmartBoardSubject.AUTO, SmartBoardSubject.MATHEMATICS)) {
+            status = "Equation to Graph is available in Mathematics or Auto Detect mode"
+            return
+        }
+        recognitionTarget = SmartBoardRecognitionTarget.GRAPH_2D
+        recognizeSelection(force = true, openEditableGraph = true)
     }
 
     fun cancelRecognition() {
@@ -1716,6 +2252,8 @@ class SmartBoardViewModel(
                 moduleRoute = prepared.route,
                 bounds = element.bounds.translate(SmartBoardPoint(0f, element.bounds.height + 20f)),
                 createdAt = now(),
+                parameterValues = mathGraphIntelligence.discoverParameters(prepared.expression)
+                    .associate { it.symbol to it.initial },
             )
         }
         val relatedElements = subjectRelatedElements + listOfNotNull(graphElement)
@@ -1871,6 +2409,10 @@ class SmartBoardViewModel(
                         graphKind = prepared.kind,
                         expressions = listOf(prepared.expression),
                         moduleRoute = prepared.route,
+                        parameterValues = mathGraphIntelligence.discoverParameters(prepared.expression)
+                            .associate { parameter ->
+                                parameter.symbol to (existing.parameterValues[parameter.symbol] ?: parameter.initial)
+                            },
                     ),
                     "Edit graph configuration",
                 ),
@@ -1889,6 +2431,8 @@ class SmartBoardViewModel(
             moduleRoute = prepared.route,
             bounds = SmartBoardBounds(centerX, centerY, centerX + 360f, centerY + 220f),
             createdAt = now(),
+            parameterValues = mathGraphIntelligence.discoverParameters(prepared.expression)
+                .associate { it.symbol to it.initial },
         )
         execute(AddElementCommand(element))
         selectedIds = setOf(element.id)
@@ -2617,6 +3161,52 @@ class SmartBoardViewModel(
     private fun execute(command: SmartBoardCommand) {
         document = history.execute(document, command, now())
         scheduleAutosave()
+        scheduleSemanticCanvas()
+        scheduleMathGraphIntelligence()
+    }
+
+    private fun scheduleSemanticCanvas() {
+        semanticCanvasJob?.cancel()
+        semanticCanvasJob = viewModelScope.launch {
+            delay(350)
+            computeSemanticCanvas()
+        }
+    }
+
+    private fun refreshSemanticCanvas() {
+        semanticCanvasJob?.cancel()
+        semanticCanvasJob = viewModelScope.launch {
+            computeSemanticCanvas()
+        }
+    }
+
+    private suspend fun computeSemanticCanvas() {
+        val active = document
+        val pages = (listOf(active) + recentBoards).distinctBy(SmartBoardDocument::id)
+        semanticCanvas = withContext(Dispatchers.Default) {
+            semanticCanvasEngine.analyze(active, pages, now())
+        }
+    }
+
+    private fun scheduleMathGraphIntelligence() {
+        mathGraphIntelligenceJob?.cancel()
+        mathGraphIntelligenceJob = viewModelScope.launch {
+            delay(700)
+            val graphSources = document.elements.filterIsInstance<GraphConfigurationElement>()
+                .flatMapTo(hashSetOf(), GraphConfigurationElement::sourceElementIds)
+            val strokes = document.elements.filterIsInstance<StrokeElement>()
+                .filterNot { it.id in graphSources }
+            val shapes = document.elements.filterIsInstance<ShapeElement>()
+            val expressions = document.elements.filterIsInstance<MathExpressionElement>()
+                .filterNot { it.hidden || it.id in graphSources }
+            graphFromInkSuggestion = withContext(Dispatchers.Default) {
+                mathGraphIntelligence.analyzeInk(strokes, shapes, expressions, now())
+            }
+            val lines = document.elements.filterIsInstance<MathExpressionElement>().filterNot(MathExpressionElement::hidden)
+            localizedMathMistake = withContext(Dispatchers.Default) {
+                mathGraphIntelligence.localizeMistake(lines)
+            }
+        }
     }
 
     private fun scheduleAutosave() {

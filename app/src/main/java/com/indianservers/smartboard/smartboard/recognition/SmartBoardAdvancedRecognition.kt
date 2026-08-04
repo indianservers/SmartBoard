@@ -15,6 +15,7 @@ import kotlin.math.pow
 import kotlinx.coroutines.async
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -261,17 +262,40 @@ class MultimodalMathRecognitionEngine(
     private val digitalInk: MathHandwritingRecognitionProvider,
     private val image: MathImageRecognitionProvider,
 ) {
+    private val structureEnhancer = StructureAwareRecognitionEnhancer()
+    @Volatile private var digitalRetryAfterMillis = 0L
+
     suspend fun recognize(
         input: MathRecognitionInput,
         options: MathRecognitionOptions = MathRecognitionOptions(),
         previousPrimary: String? = null,
     ): StreamingRecognitionSnapshot = supervisorScope {
         val started = System.currentTimeMillis()
-        val digital = async { runCatching { digitalInk.recognize(input, options) }.getOrNull() }
-        val raster = async {
-            if (input.rasterPng.isEmpty()) null else runCatching { image.recognize(input.rasterPng, options.maximumAlternatives) }.getOrNull()
+        val digital = async {
+            providerResult(
+                retryAfter = digitalRetryAfterMillis,
+                timeoutMillis = DIGITAL_PROVIDER_TIMEOUT_MILLIS,
+                onUnavailable = { digitalRetryAfterMillis = it },
+            ) { digitalInk.recognize(input, options) }
         }
-        fuse(input.requestFingerprint, digital.await(), raster.await(), previousPrimary, System.currentTimeMillis() - started)
+        val raster = async {
+            if (input.rasterPng.isEmpty()) null else providerResult(
+                retryAfter = 0L,
+                timeoutMillis = RASTER_PROVIDER_TIMEOUT_MILLIS,
+                onUnavailable = {},
+            ) { image.recognize(input.rasterPng, options.maximumAlternatives) }
+        }
+        val digitalResult = digital.await()
+        val rasterResult = raster.await()
+        val fused = if (digitalResult == null && rasterResult == null) {
+            unavailableSnapshot(input.requestFingerprint, System.currentTimeMillis() - started)
+        } else {
+            fuse(input.requestFingerprint, digitalResult, rasterResult, previousPrimary, System.currentTimeMillis() - started)
+        }
+        structureEnhancer.enhance(
+            fused,
+            input.strokes,
+        ).snapshot
     }
 
     suspend fun enhanceWithRaster(
@@ -280,15 +304,21 @@ class MultimodalMathRecognitionEngine(
         previousPrimary: String? = null,
     ): StreamingRecognitionSnapshot {
         val started = System.currentTimeMillis()
-        val raster = if (input.rasterPng.isEmpty()) null
-        else runCatching { image.recognize(input.rasterPng) }.getOrNull()
-        return fuse(
-            input.requestFingerprint,
-            digitalResult,
-            raster,
-            previousPrimary,
-            System.currentTimeMillis() - started,
-        )
+        val raster = if (input.rasterPng.isEmpty()) null else providerResult(
+            retryAfter = 0L,
+            timeoutMillis = RASTER_PROVIDER_TIMEOUT_MILLIS,
+            onUnavailable = {},
+        ) { image.recognize(input.rasterPng) }
+        return structureEnhancer.enhance(
+            fuse(
+                input.requestFingerprint,
+                digitalResult,
+                raster,
+                previousPrimary,
+                System.currentTimeMillis() - started,
+            ),
+            input.strokes,
+        ).snapshot
     }
 
     fun fuse(
@@ -315,8 +345,11 @@ class MultimodalMathRecognitionEngine(
                 }
         }
         val dedicatedFormulaVision = raster?.warnings.orEmpty().any { "TexTeller" in it }
-        add(digital, RecognitionCandidateSource.DIGITAL_INK, if (dedicatedFormulaVision) .38f else .58f)
-        add(raster, RecognitionCandidateSource.RASTER_IMAGE, if (dedicatedFormulaVision) .52f else .30f)
+        // A ready TexTeller pass is trained specifically for two-dimensional mathematical
+        // notation. Generic handwriting remains useful as an alternative, but must not outrank a
+        // dedicated formula result merely because its confidence is calibrated differently.
+        add(digital, RecognitionCandidateSource.DIGITAL_INK, if (dedicatedFormulaVision) .16f else .58f)
+        add(raster, RecognitionCandidateSource.RASTER_IMAGE, if (dedicatedFormulaVision) .78f else .30f)
         candidates.forEach { (normalized, candidate) ->
             val analysis = SmartBoardExpressionAnalyzer.analyze(normalized)
             if (analysis.parserVerified) {
@@ -371,6 +404,56 @@ class MultimodalMathRecognitionEngine(
 
     private fun normalize(value: String) = runCatching { SmartBoardLatexAdapter.toEngineExpression(value) }
         .getOrDefault(value).replace(Regex("""\s+"""), "").trim()
+
+    private fun unavailableSnapshot(
+        fingerprint: String,
+        latencyMillis: Long,
+    ): StreamingRecognitionSnapshot {
+        val candidate = RecognitionLatticeCandidate(
+            text = "?",
+            normalizedExpression = "?",
+            confidence = 0f,
+            sources = emptySet(),
+            parserVerified = false,
+            detectedType = MathExpressionType.UNKNOWN,
+        )
+        val result = MathRecognitionResult(
+            latex = "?",
+            normalizedExpression = "?",
+            plainText = "?",
+            confidence = 0f,
+            alternatives = emptyList(),
+            detectedType = MathExpressionType.UNKNOWN,
+            warnings = listOf("Recognition providers are temporarily unavailable; the original ink is unchanged."),
+        )
+        return StreamingRecognitionSnapshot(
+            requestFingerprint = fingerprint,
+            candidates = listOf(candidate),
+            stablePrimary = null,
+            stability = 0f,
+            latencyMillis = latencyMillis.coerceAtLeast(0),
+            result = result,
+        )
+    }
+
+    private suspend fun <T> providerResult(
+        retryAfter: Long,
+        timeoutMillis: Long,
+        onUnavailable: (Long) -> Unit,
+        block: suspend () -> T,
+    ): T? {
+        val now = System.currentTimeMillis()
+        if (now < retryAfter) return null
+        val result = withTimeoutOrNull(timeoutMillis) { runCatching { block() }.getOrNull() }
+        if (result == null) onUnavailable(now + PROVIDER_RETRY_COOLDOWN_MILLIS)
+        return result
+    }
+
+    private companion object {
+        const val DIGITAL_PROVIDER_TIMEOUT_MILLIS = 60_000L
+        const val RASTER_PROVIDER_TIMEOUT_MILLIS = 30_000L
+        const val PROVIDER_RETRY_COOLDOWN_MILLIS = 60_000L
+    }
 }
 
 class StreamingMathRecognitionEngine(

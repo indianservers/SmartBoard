@@ -49,7 +49,7 @@ object CasPhotoMathRecognizer {
     }
 }
 
-class CasHandwritingRecognizer(languageTag: String = "en-IN") : AutoCloseable {
+class CasHandwritingRecognizer(languageTag: String = "en-US") : AutoCloseable {
     private val model: DigitalInkRecognitionModel
     private val recognizer: DigitalInkRecognizer
     private val closed = AtomicBoolean(false)

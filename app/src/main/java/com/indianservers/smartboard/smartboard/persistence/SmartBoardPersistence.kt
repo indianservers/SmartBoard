@@ -207,7 +207,8 @@ object SmartBoardDocumentCodec {
                 )
                 is GraphConfigurationElement -> appendLine(
                     listOf("G", pack(element.id), element.graphKind.name, pack(element.expressions.joinToString("\u001f")),
-                        pack(element.sourceElementIds.joinToString(",")), pack(element.moduleRoute), bounds(element.bounds), element.createdAt, element.hidden).joinToString("|"),
+                        pack(element.sourceElementIds.joinToString(",")), pack(element.moduleRoute), bounds(element.bounds), element.createdAt, element.hidden,
+                        pack(element.parameterValues.entries.joinToString(";") { "${it.key},${it.value}" })).joinToString("|"),
                 )
                 is SolutionSequenceElement -> appendLine(
                     listOf("Q", pack(element.id), pack(element.problemExpression), pack(encodeSteps(element.steps)),
@@ -562,6 +563,10 @@ object SmartBoardDocumentCodec {
         unpack(fields[1]), enumValueOrDefault(fields[2], SmartBoardGraphKind.EXPLICIT_2D),
         unpack(fields[3]).split('\u001f').filter(String::isNotBlank), unpack(fields[4]).split(',').filter(String::isNotBlank),
         unpack(fields[5]), parseBounds(fields[6]), fields[7].toLong(), fields[8].toBooleanStrictOrNull() ?: false,
+        fields.getOrNull(9)?.let(::unpack)?.split(';')?.mapNotNull { entry ->
+            val parts = entry.split(',', limit = 2)
+            parts.takeIf { it.size == 2 }?.let { it[0] to it[1].toDoubleOrNull() }
+        }?.mapNotNull { (name, value) -> value?.let { name to it } }?.toMap().orEmpty(),
     )
 
     private fun decodeSolutionSequence(fields: List<String>) = SolutionSequenceElement(
@@ -1025,6 +1030,22 @@ class SmartBoardRepository(context: Context) {
         }
     }
 
+    suspend fun saveCanvasTeachingProfile(encodedProfile: String) {
+        require(encodedProfile.length <= 512_000)
+        applicationContext.smartBoardPreferencesDataStore.edit { preferences ->
+            preferences[canvasTeachingProfileKey] = encodedProfile
+        }
+    }
+
+    suspend fun loadCanvasTeachingProfile(): String =
+        applicationContext.smartBoardPreferencesDataStore.data.first()[canvasTeachingProfileKey].orEmpty()
+
+    suspend fun clearCanvasTeachingProfile() {
+        applicationContext.smartBoardPreferencesDataStore.edit { preferences ->
+            preferences.remove(canvasTeachingProfileKey)
+        }
+    }
+
     private fun SmartBoardDocument.values() = ContentValues().apply {
         put("id", id)
         put("title", title)
@@ -1050,6 +1071,7 @@ class SmartBoardRepository(context: Context) {
         val recognitionDiagnosticsKey = booleanPreferencesKey("recognition_diagnostics")
         val recognitionQualityTierKey = stringPreferencesKey("recognition_quality_tier")
         val recognitionProfileKey = stringPreferencesKey("recognition_personalization_profile_v1")
+        val canvasTeachingProfileKey = stringPreferencesKey("canvas_teaching_profile_v1")
         const val CurrentRecognitionDefaultsVersion = 1
         inline fun <reified T : Enum<T>> enumValueOrDefault(value: String, fallback: T) =
             runCatching { enumValueOf<T>(value) }.getOrDefault(fallback)
