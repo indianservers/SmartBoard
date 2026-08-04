@@ -78,6 +78,41 @@ class SmartBoardAutoShapeTest {
     }
 
     @Test
+    fun `fits cube and cylinder from conservative multi stroke construction cues`() {
+        val a = p(0f, 25f)
+        val b = p(60f, 25f)
+        val c = p(60f, 85f)
+        val d = p(0f, 85f)
+        val e = p(25f, 0f)
+        val f = p(85f, 0f)
+        val g = p(85f, 60f)
+        val h = p(25f, 60f)
+        val cubeEdges = listOf(
+            a to b, b to c, c to d, d to a,
+            e to f, f to g, g to h, h to e,
+            a to e, b to f, c to g, d to h,
+        ).mapIndexed { index, (start, end) ->
+            stroke("cube-$index", listOf(start, end), index.toLong() + 1)
+        }
+        assertEquals(SmartBoardShapeType.CUBE, recognizer.recognize(cubeEdges, forced = true).first().type)
+
+        fun ellipse(id: String, centerY: Float) = stroke(
+            id,
+            (0..32).map { index ->
+                val angle = 2.0 * PI * index / 32
+                p(60f + cos(angle).toFloat() * 40f, centerY + sin(angle).toFloat() * 12f)
+            },
+        )
+        val cylinder = listOf(
+            ellipse("top-rim", 20f),
+            ellipse("bottom-rim", 100f),
+            stroke("left-side", listOf(p(20f, 20f), p(20f, 100f))),
+            stroke("right-side", listOf(p(100f, 20f), p(100f, 100f))),
+        )
+        assertEquals(SmartBoardShapeType.CYLINDER, recognizer.recognize(cylinder, forced = true).first().type)
+    }
+
+    @Test
     fun `fits polygon and rejects low confidence handwriting like ink`() {
         val pentagon = stroke(
             "pentagon",

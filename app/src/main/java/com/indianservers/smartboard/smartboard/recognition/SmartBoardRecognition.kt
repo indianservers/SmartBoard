@@ -217,17 +217,36 @@ class SmartBoardSubjectRegistry(handlers: List<SmartBoardSubjectHandler>) {
 }
 
 object MathRecognitionClassifier {
-    fun detect(source: String): MathExpressionType = when {
-        source.matches(Regex("[+-]?\\d+(\\.\\d+)?")) -> MathExpressionType.NUMBER
-        Regex("\\b(lim|int|sum|prod|d/d|partial)\\b|[∫ΣΠ∂]").containsMatchIn(source) -> MathExpressionType.CALCULUS
-        source.contains("<=") || source.contains(">=") || source.contains('<') || source.contains('>') -> MathExpressionType.INEQUALITY
-        source.contains('=') -> MathExpressionType.EQUATION
-        source.startsWith("[") || source.startsWith("\\begin{matrix}") -> MathExpressionType.MATRIX
-        Regex("\\([^)]+,[^)]+\\)").matches(source) -> MathExpressionType.COORDINATE
-        Regex("\\b(sin|cos|tan|log|ln)\\b", RegexOption.IGNORE_CASE).containsMatchIn(source) -> MathExpressionType.FUNCTION
-        source.any(Char::isLetter) -> MathExpressionType.ALGEBRAIC_EXPRESSION
-        source.any { it in "+-*/^√" } -> MathExpressionType.ARITHMETIC
-        else -> MathExpressionType.UNKNOWN
+    fun detect(source: String): MathExpressionType {
+        val value = source.trim()
+        val compact = value.replace(Regex("""\s+"""), "")
+        return when {
+            value.matches(Regex("[+-]?\\d+(\\.\\d+)?")) -> MathExpressionType.NUMBER
+            Regex("""\\begin\{[pbvBV]?matrix\}|\[[^\[\]]*(?:;|\\\\)[^\[\]]*\]""", RegexOption.IGNORE_CASE)
+                .containsMatchIn(value) -> MathExpressionType.MATRIX
+            Regex("""\\begin\{(?:cases|aligned)\}|\{[^{}]*(?:;|\\\\)[^{}]*\}""", RegexOption.IGNORE_CASE)
+                .containsMatchIn(value) -> MathExpressionType.SYSTEM
+            Regex("""(?:\\vec|→|⟨)[({<]?[^,]+,[^,]+(?:,[^,]+)?[)}>]?""", RegexOption.IGNORE_CASE)
+                .containsMatchIn(value) -> MathExpressionType.VECTOR
+            Regex("""(?:d\s*/\s*d[a-z]|\\frac\{d\}|\\partial|∂)""", RegexOption.IGNORE_CASE)
+                .containsMatchIn(value) -> MathExpressionType.DERIVATIVE
+            Regex("""(?:\\int|∫)""").containsMatchIn(value) -> MathExpressionType.INTEGRAL
+            Regex("""(?:\\lim|\blim\b)""", RegexOption.IGNORE_CASE).containsMatchIn(value) -> MathExpressionType.LIMIT
+            Regex("""(?:\\sum|\\prod|Σ|Π)""").containsMatchIn(value) -> MathExpressionType.CALCULUS
+            compact.startsWith("[") && compact.endsWith("]") &&
+                compact.removeSurrounding("[", "]").split(',', ';').all { it.toDoubleOrNull() != null } ->
+                MathExpressionType.DATASET
+            value.contains("<=") || value.contains(">=") || value.contains("\\le") || value.contains("\\ge") ||
+                value.contains('≤') || value.contains('≥') || value.contains('<') || value.contains('>') ->
+                MathExpressionType.INEQUALITY
+            value.contains('=') -> MathExpressionType.EQUATION
+            Regex("\\([^)]+,[^)]+\\)").matches(value) -> MathExpressionType.COORDINATE
+            Regex("""(?:\\?(?:sin|cos|tan|sec|csc|cot|asin|acos|atan|sinh|cosh|tanh|log|ln|exp))\b""", RegexOption.IGNORE_CASE)
+                .containsMatchIn(value) -> MathExpressionType.FUNCTION
+            value.any(Char::isLetter) -> MathExpressionType.ALGEBRAIC_EXPRESSION
+            value.any { it in "+-*/^√" } -> MathExpressionType.ARITHMETIC
+            else -> MathExpressionType.UNKNOWN
+        }
     }
 }
 
@@ -261,7 +280,7 @@ object SafeLatexPreview {
                 "Unsupported LaTeX command: \\${match.groupValues[1]}"
             }
         }
-        Regex("""\\(?:begin|end)\{([^}]+)}""").findAll(value).forEach { match ->
+        Regex("""\\(?:begin|end)\{([^}]+)\}""").findAll(value).forEach { match ->
             require(match.groupValues[1].lowercase() in allowedEnvironments) {
                 "Unsupported LaTeX environment: ${match.groupValues[1]}"
             }

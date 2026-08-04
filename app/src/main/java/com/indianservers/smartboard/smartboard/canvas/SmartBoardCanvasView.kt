@@ -480,6 +480,12 @@ class SmartBoardCanvasView(context: Context) : View(context) {
             SmartBoardShapeType.PERPENDICULAR_LINES,
             SmartBoardShapeType.NUMBER_LINE,
             SmartBoardShapeType.GRAPH_GRID,
+            SmartBoardShapeType.CUBE,
+            SmartBoardShapeType.CUBOID,
+            SmartBoardShapeType.CYLINDER,
+            SmartBoardShapeType.CONE,
+            SmartBoardShapeType.SPHERE,
+            SmartBoardShapeType.PYRAMID,
         )
         val path = Path()
         if (pairwise) {

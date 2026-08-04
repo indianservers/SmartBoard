@@ -49,6 +49,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,6 +69,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -118,6 +120,7 @@ import com.indianservers.smartboard.smartboard.integration.SmartBoardLatexAdapte
 import com.indianservers.smartboard.latexStyleFormula
 import com.indianservers.smartboard.smartboard.tutor.SmartBoardTutorVerificationStatus
 import com.indianservers.smartboard.smartboard.tutor.UnifiedTutorMode
+import kotlinx.coroutines.launch
 
 private val BoardBackground = Color(0xFF071018)
 private val BoardPanel = Color(0xF2142230)
@@ -147,6 +150,7 @@ fun SmartBoardFeatureRoot(
     var latexEditorOpen by remember { mutableStateOf(false) }
     var graphEditorOpen by remember { mutableStateOf(false) }
     var toolboxOpen by remember { mutableStateOf(false) }
+    var detectionInboxOpen by remember { mutableStateOf(false) }
     var pendingExport by remember { mutableStateOf(SmartBoardExportFormat.STRUCTURED) }
     var eraserRadius by remember { mutableStateOf(18f) }
     val context = LocalContext.current
@@ -203,6 +207,14 @@ fun SmartBoardFeatureRoot(
     ) {
         val wide = maxWidth >= 800.dp
         val compact = maxWidth < 560.dp
+        val quietDetectionCount =
+            (if (vm.recognitionReview != null) 1 else 0) +
+                (if (vm.streamingRecognitionSuggestion != null) 1 else 0) +
+                (if (vm.shapeSuggestion != null) 1 else 0) +
+                (if (vm.correctionGestureSuggestion != null) 1 else 0)
+        LaunchedEffect(quietDetectionCount) {
+            if (quietDetectionCount == 0) detectionInboxOpen = false
+        }
         Column(Modifier.fillMaxSize()) {
             SmartBoardTopBar(
                 title = vm.document.title,
@@ -214,6 +226,7 @@ fun SmartBoardFeatureRoot(
                 },
                 onSave = vm::save,
                 onOpen = { recentOpen = true },
+                onShare = { shareSmartBoardApp(context) },
                 moreOpen = moreOpen,
                 onMore = { moreOpen = !moreOpen },
                 onDismissMore = { moreOpen = false },
@@ -331,16 +344,15 @@ fun SmartBoardFeatureRoot(
                             modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
                         )
                     }
-                    if (vm.shapeSuggestion != null || vm.streamingRecognitionSuggestion != null || vm.correctionGestureSuggestion != null) {
-                        Column(
-                            Modifier.align(Alignment.BottomCenter).padding(start = 8.dp, end = 8.dp, bottom = 48.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            vm.correctionGestureSuggestion?.let { CorrectionGestureCard(vm) }
-                            vm.streamingRecognitionSuggestion?.let { StreamingRecognitionCard(vm) }
-                            vm.shapeSuggestion?.let { ShapeSuggestionCard(vm) }
-                        }
+                    if (quietDetectionCount > 0 || vm.recognizing) {
+                        QuietDetectionButton(
+                            resultCount = quietDetectionCount,
+                            recognizing = vm.recognizing,
+                            reviewReady = vm.recognitionReview != null,
+                            handwritingCandidatesReady = vm.streamingRecognitionSuggestion != null,
+                            onClick = { if (quietDetectionCount > 0) detectionInboxOpen = true },
+                            modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
+                        )
                     }
                     vm.wholeBoardUnderstanding?.let {
                         WholeBoardUnderstandingCard(
@@ -359,9 +371,6 @@ fun SmartBoardFeatureRoot(
                             .semantics { liveRegion = LiveRegionMode.Polite }
                             .padding(horizontal = 9.dp, vertical = 6.dp),
                     )
-                }
-                if (wide && vm.recognitionReview != null) {
-                    RecognitionPanel(vm, Modifier.widthIn(min = 310.dp, max = 390.dp).fillMaxHeight())
                 }
                 if (wide && intelligenceOpen) {
                     IntelligencePanel(
@@ -392,9 +401,27 @@ fun SmartBoardFeatureRoot(
             }
         }
 
-        if (!wide && vm.recognitionReview != null) {
-            ModalBottomSheet(onDismissRequest = vm::cancelRecognition, containerColor = BoardPanel) {
-                RecognitionPanel(vm, Modifier.fillMaxWidth().heightIn(max = if (compact) 620.dp else 720.dp))
+        if (detectionInboxOpen && quietDetectionCount > 0) {
+            ModalBottomSheet(onDismissRequest = { detectionInboxOpen = false }, containerColor = BoardPanel) {
+                if (vm.recognitionReview != null) {
+                    RecognitionPanel(vm, Modifier.fillMaxWidth().heightIn(max = if (compact) 620.dp else 720.dp))
+                } else {
+                    Column(
+                        Modifier.fillMaxWidth().heightIn(max = if (compact) 620.dp else 720.dp)
+                            .verticalScroll(rememberScrollState()).padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text("Detected content", color = BoardInk, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Nothing changes until you select and confirm a result.",
+                            color = BoardWarning,
+                            fontSize = 10.sp,
+                        )
+                        vm.streamingRecognitionSuggestion?.let { StreamingRecognitionCard(vm, Modifier.fillMaxWidth()) }
+                        vm.correctionGestureSuggestion?.let { CorrectionGestureCard(vm, Modifier.fillMaxWidth()) }
+                        vm.shapeSuggestion?.let { ShapeSuggestionCard(vm, Modifier.fillMaxWidth()) }
+                    }
+                }
             }
         }
         if (!wide && intelligenceOpen) {
@@ -607,9 +634,13 @@ fun SmartBoardFeatureRoot(
                         if (vm.recognitionTarget == SmartBoardRecognitionTarget.GRAPH_2D) "✓ Graph mode" else "Graph mode",
                         enabled = vm.document.subjectMode.selection in setOf(SmartBoardSubject.AUTO, SmartBoardSubject.MATHEMATICS),
                     ) { vm.updateRecognitionTarget(SmartBoardRecognitionTarget.GRAPH_2D) }
+                    BoardButton(
+                        if (vm.recognitionTarget == SmartBoardRecognitionTarget.GRAPH_3D) "✓ 3D surface" else "3D surface",
+                        enabled = vm.document.subjectMode.selection in setOf(SmartBoardSubject.AUTO, SmartBoardSubject.MATHEMATICS),
+                    ) { vm.updateRecognitionTarget(SmartBoardRecognitionTarget.GRAPH_3D) }
                 }
                 Text(
-                    "Graph mode recognizes mathematical handwriting, keeps its source ink, creates an editable graph object and opens the graph immediately.",
+                    "Graph mode recognizes mathematical handwriting, keeps its source ink, creates an editable 2D curve or 3D surface object, and opens it immediately.",
                     color = BoardCyan,
                     fontSize = 10.sp,
                 )
@@ -770,6 +801,7 @@ private fun SmartBoardTopBar(
     onExit: () -> Unit,
     onSave: () -> Unit,
     onOpen: () -> Unit,
+    onShare: () -> Unit,
     moreOpen: Boolean,
     onMore: () -> Unit,
     onDismissMore: () -> Unit,
@@ -845,6 +877,7 @@ private fun SmartBoardTopBar(
                 ) {
                     BoardButton("Save", onClick = onSave)
                     BoardButton("Open", onClick = onOpen)
+                    ShareButton(onClick = onShare)
                 }
             }
         } else {
@@ -866,6 +899,7 @@ private fun SmartBoardTopBar(
                 }
                 BoardButton("Save", onClick = onSave)
                 BoardButton("Open", onClick = onOpen)
+                ShareButton(onClick = onShare)
                 moreMenu()
             }
         }
@@ -902,18 +936,21 @@ private fun SmartBoardToolbar(
         )
         ToolButton("Undo", enabled = vm.canUndo) { vm.undo() }
         ToolButton("Redo", enabled = vm.canRedo) { vm.redo() }
-        ToolButton("Clear", enabled = vm.document.elements.isNotEmpty(), warning = true) { vm.clearBoard() }
         ToolButton(if (vm.recognizing) "Reading…" else "Recognize", enabled = !vm.recognizing) { vm.recognizeSelection() }
         ToolButton(
-            "Graph AI",
-            selected = vm.recognitionTarget == SmartBoardRecognitionTarget.GRAPH_2D,
+            when (vm.recognitionTarget) {
+                SmartBoardRecognitionTarget.CONTENT -> "Graph AI"
+                SmartBoardRecognitionTarget.GRAPH_2D -> "Graph 2D ✓"
+                SmartBoardRecognitionTarget.GRAPH_3D -> "Graph 3D ✓"
+            },
+            selected = vm.recognitionTarget != SmartBoardRecognitionTarget.CONTENT,
             enabled = vm.document.subjectMode.selection in setOf(SmartBoardSubject.AUTO, SmartBoardSubject.MATHEMATICS),
         ) {
             vm.updateRecognitionTarget(
-                if (vm.recognitionTarget == SmartBoardRecognitionTarget.GRAPH_2D) {
-                    SmartBoardRecognitionTarget.CONTENT
-                } else {
-                    SmartBoardRecognitionTarget.GRAPH_2D
+                when (vm.recognitionTarget) {
+                    SmartBoardRecognitionTarget.CONTENT -> SmartBoardRecognitionTarget.GRAPH_2D
+                    SmartBoardRecognitionTarget.GRAPH_2D -> SmartBoardRecognitionTarget.GRAPH_3D
+                    SmartBoardRecognitionTarget.GRAPH_3D -> SmartBoardRecognitionTarget.CONTENT
                 },
             )
         }
@@ -928,13 +965,73 @@ private fun SmartBoardToolbar(
             modifier.background(BoardPanel).padding(5.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(5.dp),
-        ) { content() }
+        ) {
+            ClearBoardButton(vm.document.elements.isNotEmpty(), vm::clearBoard)
+            content()
+        }
     } else {
+        val toolbarScroll = rememberScrollState()
+        val toolbarScope = rememberCoroutineScope()
         Row(
-            modifier.background(BoardPanel).horizontalScroll(rememberScrollState()).padding(5.dp),
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
-        ) { content() }
+            modifier.background(BoardPanel).padding(horizontal = 3.dp, vertical = 5.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ClearBoardButton(vm.document.elements.isNotEmpty(), vm::clearBoard)
+            ToolbarScrollButton("‹", "Previous toolbar tools", toolbarScroll.value > 0) {
+                toolbarScope.launch {
+                    val page = (toolbarScroll.viewportSize * .82f).toInt().coerceAtLeast(74)
+                    toolbarScroll.animateScrollTo((toolbarScroll.value - page).coerceAtLeast(0))
+                }
+            }
+            Row(
+                Modifier.weight(1f).horizontalScroll(toolbarScroll),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) { content() }
+            ToolbarScrollButton("›", "Next toolbar tools", toolbarScroll.value < toolbarScroll.maxValue) {
+                toolbarScope.launch {
+                    val page = (toolbarScroll.viewportSize * .82f).toInt().coerceAtLeast(74)
+                    toolbarScroll.animateScrollTo((toolbarScroll.value + page).coerceAtMost(toolbarScroll.maxValue))
+                }
+            }
+        }
     }
+}
+
+@Composable
+private fun ClearBoardButton(enabled: Boolean, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.size(width = 74.dp, height = 48.dp).semantics {
+            contentDescription = "Clear Board"
+        },
+        shape = RoundedCornerShape(10.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color(0xFF7A2438),
+            contentColor = BoardInk,
+        ),
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+    ) {
+        Text("Clear\nBoard", fontSize = 9.sp, maxLines = 2, textAlign = TextAlign.Center)
+    }
+}
+
+@Composable
+private fun ToolbarScrollButton(
+    label: String,
+    description: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.size(width = 42.dp, height = 48.dp).semantics { contentDescription = description },
+        shape = RoundedCornerShape(9.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30465D), contentColor = BoardInk),
+        contentPadding = PaddingValues(0.dp),
+    ) { Text(label, fontSize = 20.sp) }
 }
 
 @Composable
@@ -1054,6 +1151,41 @@ private fun SelectionActions(
             BoardButton("Edit graph", onClick = onEditGraph)
             BoardButton("Open graph") { onHandoff(graph.moduleRoute, graph.expressions.first()) }
         }
+    }
+}
+
+@Composable
+private fun QuietDetectionButton(
+    resultCount: Int,
+    recognizing: Boolean,
+    reviewReady: Boolean,
+    handwritingCandidatesReady: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Button(
+        onClick = onClick,
+        enabled = resultCount > 0,
+        modifier = modifier.semantics {
+            contentDescription = when {
+                reviewReady -> "Recognition review ready. $resultCount result groups. Tap to choose."
+                handwritingCandidatesReady -> "Handwriting candidates ready. $resultCount result groups. Tap to choose."
+                resultCount > 0 -> "$resultCount detection result groups ready. Tap to choose."
+                else -> "Detecting handwriting silently"
+            }
+        },
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color(0xFF244A5B),
+            contentColor = BoardInk,
+        ),
+        shape = RoundedCornerShape(18.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
+    ) {
+        Text(
+            if (resultCount > 0) "Results $resultCount" else if (recognizing) "Detecting…" else "Results",
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 
@@ -1375,7 +1507,11 @@ private fun RecognitionPanel(vm: SmartBoardViewModel, modifier: Modifier) {
         SettingSwitch("Hide source handwriting after insertion", review.hideSourceHandwriting, vm::setHideSourceHandwriting)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             BoardButton(
-                if (vm.recognitionTarget == SmartBoardRecognitionTarget.GRAPH_2D) "Insert & show graph" else "Insert recognized content",
+                when (vm.recognitionTarget) {
+                    SmartBoardRecognitionTarget.CONTENT -> "Insert recognized content"
+                    SmartBoardRecognitionTarget.GRAPH_2D -> "Insert & show 2D graph"
+                    SmartBoardRecognitionTarget.GRAPH_3D -> "Insert & show 3D graph"
+                },
                 onClick = vm::confirmRecognition,
             )
             BoardButton("Retry", onClick = { vm.recognizeSelection(force = true) })
@@ -1859,6 +1995,22 @@ private fun BoardButton(label: String, enabled: Boolean = true, warning: Boolean
         modifier = Modifier.heightIn(min = 44.dp).semantics { contentDescription = label },
         colors = ButtonDefaults.buttonColors(containerColor = if (warning) Color(0xFF6B2A3B) else Color(0xFF24364A), contentColor = BoardInk),
     ) { Text(label, fontSize = 11.sp) }
+}
+
+@Composable
+private fun ShareButton(onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .heightIn(min = 44.dp)
+            .semantics { contentDescription = "Share app" },
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF24364A), contentColor = BoardInk),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+    ) {
+        Text("↗", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.width(5.dp))
+        Text("Share", fontSize = 11.sp)
+    }
 }
 
 private fun SmartBoardInputMode.label() = when (this) {

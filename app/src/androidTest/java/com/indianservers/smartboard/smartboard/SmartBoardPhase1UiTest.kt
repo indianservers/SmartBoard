@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.geometry.Offset
 import com.indianservers.smartboard.MainActivity
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -27,9 +28,14 @@ class SmartBoardPhase1UiTest {
 
     @Before
     fun openSmartBoard() {
+        compose.activity.runOnUiThread {
+            compose.activity.setShowWhenLocked(true)
+            compose.activity.setTurnScreenOn(true)
+        }
+        compose.waitForIdle()
         compose.onNodeWithText("Smart Board · Mathematics · integrated workspace").assertExists()
         compose.onNodeWithContentDescription("More").performClick()
-        compose.onNodeWithText("New Maths Board").performClick()
+        compose.onNodeWithText("New Mathematics Board").performClick()
     }
 
     @Test
@@ -72,18 +78,32 @@ class SmartBoardPhase1UiTest {
     }
 
     @Test
-    fun recognitionOpensReviewWithoutDeletingInk() {
+    fun recognitionWaitsForUserBeforeOpeningReview() {
         drawStroke()
         compose.onAllNodesWithText("Recognize")[0].performClick()
-        compose.waitUntil(60_000) { compose.onAllNodesWithText("Recognition Review").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("On-device recognition", substring = true).assertExists()
+        compose.waitUntil(60_000) {
+            compose.onAllNodes(hasContentDescription("Recognition review ready", substring = true))
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        assertTrue(
+            "Recognition review interrupted the user before Results was selected",
+            compose.onAllNodesWithText("Recognition Review").fetchSemanticsNodes().isEmpty(),
+        )
+        compose.onNode(hasContentDescription("Recognition review ready", substring = true)).performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Recognition Review").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("handwriting is never replaced automatically", substring = true).assertExists()
     }
 
     @Test
     fun recognizedLatexCanBeEdited() {
         drawStroke()
         compose.onAllNodesWithText("Recognize")[0].performClick()
-        compose.waitUntil(60_000) { compose.onAllNodesWithText("Recognition Review").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(60_000) {
+            compose.onAllNodes(hasContentDescription("Recognition review ready", substring = true))
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNode(hasContentDescription("Recognition review ready", substring = true)).performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Recognition Review").fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodes(hasSetTextAction())[1].performTextReplacement("\\frac{1}{2}")
         compose.onNodeWithText("\\frac{1}{2}").assertExists()
     }

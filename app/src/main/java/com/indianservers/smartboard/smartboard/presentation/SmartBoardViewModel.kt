@@ -647,7 +647,6 @@ class SmartBoardViewModel(
                         candidate.sourceStrokeIds.all { id -> document.elements.any { it.id == id && !it.hidden } }
                     }) {
                     shapeSuggestion = AutoShapeSuggestion(candidates, createdAt = now(), forced = false)
-                    status = "Shape suggestion ready; original ink is unchanged"
                 }
             }
         }
@@ -691,9 +690,8 @@ class SmartBoardViewModel(
                         outcome.rankedCandidates.associate { it.candidate.text to it.evidence },
                     )
                     recordRecognitionDiagnostic(snapshot, RecognitionDiagnosticInput.FUSED)
-                    status = "Live recognition updated in ${snapshot.latencyMillis} ms with explainable context; ink is unchanged"
                 }.onFailure { error ->
-                    if (error !is kotlinx.coroutines.CancellationException) status = "Live recognition unavailable: ${error.message.orEmpty()}"
+                    if (error is kotlinx.coroutines.CancellationException) return@onFailure
                 }
             }
         } else if (preferences.recognitionMode != SmartBoardRecognitionMode.MANUAL_ONLY) {
@@ -708,8 +706,10 @@ class SmartBoardViewModel(
                     maximumStrokes = 48,
                 )
                 if (related.isEmpty()) return@launch
-                recognizeSelection(strokeIds = related.mapTo(linkedSetOf(), StrokeElement::id))
-                status = "Recognizing ${related.size} related handwriting stroke(s)"
+                recognizeSelection(
+                    strokeIds = related.mapTo(linkedSetOf(), StrokeElement::id),
+                    silent = true,
+                )
             }
         }
         scheduleIntelligence()
@@ -1275,17 +1275,20 @@ class SmartBoardViewModel(
     }
 
     fun updateRecognitionTarget(target: SmartBoardRecognitionTarget) {
-        if (target == SmartBoardRecognitionTarget.GRAPH_2D &&
+        if (target != SmartBoardRecognitionTarget.CONTENT &&
             document.subjectMode.selection !in setOf(SmartBoardSubject.AUTO, SmartBoardSubject.MATHEMATICS)
         ) {
             status = "Graph recognition is available in Mathematics or Auto Detect mode"
             return
         }
         recognitionTarget = target
-        status = if (target == SmartBoardRecognitionTarget.GRAPH_2D) {
-            "Graph mode: recognized mathematical expressions will open as editable graphs"
-        } else {
-            "Content mode: recognized writing will become subject-aware board content"
+        status = when (target) {
+            SmartBoardRecognitionTarget.GRAPH_2D ->
+                "2D graph mode: recognized mathematical expressions will open as editable graphs"
+            SmartBoardRecognitionTarget.GRAPH_3D ->
+                "3D graph mode: recognized z=f(x,y) surfaces will open as editable 3D graphs"
+            SmartBoardRecognitionTarget.CONTENT ->
+                "Content mode: recognized writing will become subject-aware board content"
         }
     }
 
@@ -1384,7 +1387,7 @@ class SmartBoardViewModel(
         }
     }
 
-    fun recognizeSelection(force: Boolean = false, strokeIds: Set<String>? = null) {
+    fun recognizeSelection(force: Boolean = false, strokeIds: Set<String>? = null, silent: Boolean = false) {
         automaticRecognitionJob?.cancel()
         streamingRecognitionJob?.cancel()
         autoShapeJob?.cancel()
@@ -1396,19 +1399,19 @@ class SmartBoardViewModel(
             .filterIsInstance<StrokeElement>()
             .filterNot(StrokeElement::hidden)
         if (strokes.isEmpty()) {
-            status = "Select handwriting or draw an expression first"
+            if (!silent) status = "Select handwriting or draw an expression first"
             return
         }
         val draft = MathRecognitionRequestBuilder.build(document.id, strokes, now(), subject = document.subjectMode.selection)
         val fingerprint = MathRecognitionRequestBuilder.fingerprint(draft)
         if (!force && fingerprint == lastRecognitionFingerprint && recognitionReview != null) {
-            status = "This handwriting is already in review"
+            if (!silent) status = "This handwriting is already in review"
             return
         }
         recognitionJob?.cancel()
         recognitionJob = viewModelScope.launch {
             recognizing = true
-            status = "Preparing high-contrast recognition input"
+            if (!silent) status = "Preparing high-contrast recognition input"
             var contextualEvidence = emptyList<RecognitionRerankEvidence>()
             runCatching {
                 val png = withContext(Dispatchers.Default) { MathRecognitionInputRenderer.render(strokes, draft.bounds) }
@@ -1479,14 +1482,16 @@ class SmartBoardViewModel(
                         else -> "200ms_plus"
                     },
                 )
-                status = when {
-                    unified.detection.requiresConfirmation -> "Subject confirmation required; handwriting preserved"
-                    unified.routedSubject != null -> "Detected subject: ${unified.routedSubject.displayName()}"
-                    else -> "Subject unresolved; choose a subject to continue"
+                if (!silent) {
+                    status = when {
+                        unified.detection.requiresConfirmation -> "Subject confirmation required; handwriting preserved"
+                        unified.routedSubject != null -> "Detected subject: ${unified.routedSubject.displayName()}"
+                        else -> "Subject unresolved; choose a subject to continue"
+                    }
                 }
             }.onFailure { error ->
                 if (error is kotlinx.coroutines.CancellationException) return@onFailure
-                status = "Recognition failed: ${error.message ?: "unknown error"}"
+                if (!silent) status = "Recognition failed: ${error.message ?: "unknown error"}"
             }
             recognizing = false
         }
@@ -1677,9 +1682,12 @@ class SmartBoardViewModel(
         }
         val preparedGraph = if (
             resolvedSubject == SmartBoardSubject.MATHEMATICS &&
-            recognitionTarget == SmartBoardRecognitionTarget.GRAPH_2D
+            recognitionTarget != SmartBoardRecognitionTarget.CONTENT
         ) {
-            SmartBoardGraphAdapter.prepare(latex).getOrElse { error ->
+            SmartBoardGraphAdapter.prepare(
+                latex,
+                threeDimensional = recognitionTarget == SmartBoardRecognitionTarget.GRAPH_3D,
+            ).getOrElse { error ->
                 recognitionReview = review.copy(
                     validationMessage = "This handwriting is not graphable yet: ${SmartBoardSecurityPolicy.safeError(error)}",
                 )

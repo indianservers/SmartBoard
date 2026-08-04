@@ -37,5 +37,6 @@ class SmartBoardMultiSubjectPhase1UiTest {
     fun mathematicsCanSelectGraphRecognitionMode() {
         compose.onNodeWithText("Graph mode").performScrollTo().performClick()
         compose.onNodeWithText("Graph mode recognizes mathematical handwriting", substring = true).assertExists()
+        compose.onNodeWithText("3D surface").assertExists()
     }
 }

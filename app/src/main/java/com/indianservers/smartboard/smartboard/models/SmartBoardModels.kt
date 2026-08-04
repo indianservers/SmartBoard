@@ -15,7 +15,7 @@ object SmartBoardClassroomSubjects {
     fun supports(subject: SmartBoardSubject): Boolean = subject in selectable
 }
 
-enum class SmartBoardRecognitionTarget { CONTENT, GRAPH_2D }
+enum class SmartBoardRecognitionTarget { CONTENT, GRAPH_2D, GRAPH_3D }
 
 enum class SubjectConfidenceLevel { HIGH, MEDIUM, LOW, UNRESOLVED }
 enum class SubjectClassificationSource {
@@ -167,6 +167,7 @@ enum class SmartBoardShapeType {
     SPRING, RESISTOR, CIRCUIT_WIRE, NODE,
     FLOWCHART_CONNECTOR, TEXT_BOX, BRACKET, BRACE,
     TABLE_BOUNDARY, GRAPH_GRID, LAB_CONTAINER,
+    CUBE, CUBOID, CYLINDER, CONE, SPHERE, PYRAMID,
 }
 
 data class SmartBoardPoint(val x: Float, val y: Float) {

@@ -53,6 +53,7 @@ class CasHandwritingRecognizer(languageTag: String = "en-IN") : AutoCloseable {
     private val model: DigitalInkRecognitionModel
     private val recognizer: DigitalInkRecognizer
     private val closed = AtomicBoolean(false)
+    private val lifecycleLock = Any()
 
     init {
         val identifier = DigitalInkRecognitionModelIdentifier.fromLanguageTag(languageTag)
@@ -93,8 +94,14 @@ class CasHandwritingRecognizer(languageTag: String = "en-IN") : AutoCloseable {
     }
 
     private fun runRecognition(ink: Ink, context: RecognitionContext, onSuccess: (LocalRecognitionResult) -> Unit, onFailure: (String) -> Unit) {
-        if (closed.get()) return
-        recognizer.recognize(ink, context).addOnSuccessListener { result ->
+        val task = synchronized(lifecycleLock) {
+            if (closed.get()) return
+            runCatching { recognizer.recognize(ink, context) }.getOrElse {
+                onFailure(it.message ?: "Handwriting recognition was cancelled.")
+                return
+            }
+        }
+        task.addOnSuccessListener { result ->
             if (closed.get()) return@addOnSuccessListener
             val candidates = result.candidates.map { normalizeMathText(it.text) }.distinct().filter(String::isNotBlank).take(8)
             if (candidates.isEmpty()) onFailure("No handwriting candidate was found.")
@@ -103,7 +110,9 @@ class CasHandwritingRecognizer(languageTag: String = "en-IN") : AutoCloseable {
     }
 
     override fun close() {
-        if (closed.compareAndSet(false, true)) recognizer.close()
+        synchronized(lifecycleLock) {
+            if (closed.compareAndSet(false, true)) recognizer.close()
+        }
     }
 }
 

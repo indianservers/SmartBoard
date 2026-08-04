@@ -62,20 +62,20 @@ object SmartBoardLatexAdapter {
     fun toEngineExpression(source: String): String {
         val typedPiecewise = source.trim().startsWith("piecewise{", ignoreCase = true)
         var value = source.trim().replace("\\left", "").replace("\\right", "")
-            .replace(Regex("""\^\{([^{}]+)}""")) { "^(${it.groupValues[1]})" }
-            .replace(Regex("""_\{([^{}]+)}""")) { "_${it.groupValues[1]}" }
+            .replace(Regex("""\^\{([^{}]+)\}""")) { "^(${it.groupValues[1]})" }
+            .replace(Regex("""_\{([^{}]+)\}""")) { "_${it.groupValues[1]}" }
         repeat(16) {
             val before = value
-            value = Regex("""\\(?:dfrac|tfrac|frac)\{([^{}]*)}\{([^{}]*)}""")
+            value = Regex("""\\(?:dfrac|tfrac|frac)\{([^{}]*)\}\{([^{}]*)\}""")
                 .replace(value) { "((${it.groupValues[1]})/(${it.groupValues[2]}))" }
-            value = Regex("""\\sqrt\{([^{}]*)}""").replace(value) { "sqrt(${it.groupValues[1]})" }
+            value = Regex("""\\sqrt\{([^{}]*)\}""").replace(value) { "sqrt(${it.groupValues[1]})" }
             if (value == before) return@repeat
         }
         value = value
-            .replace(Regex("""\\begin\{(?:p|b|v)?matrix}"""), "[")
-            .replace(Regex("""\\end\{(?:p|b|v)?matrix}"""), "]")
-            .replace(Regex("""\\begin\{(?:cases|aligned)}"""), "")
-            .replace(Regex("""\\end\{(?:cases|aligned)}"""), "")
+            .replace(Regex("""\\begin\{(?:p|b|v)?matrix\}"""), "[")
+            .replace(Regex("""\\end\{(?:p|b|v)?matrix\}"""), "]")
+            .replace(Regex("""\\begin\{(?:cases|aligned)\}"""), "")
+            .replace(Regex("""\\end\{(?:cases|aligned)\}"""), "")
             .replace("\\\\", ";")
             .replace("&", ",")
             .replace("\\cdot", "*").replace("\\times", "*").replace("\\div", "/")
