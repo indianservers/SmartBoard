@@ -1,0 +1,338 @@
+[
+  {
+    "id": "10404-axis-x",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 510.8,
+        "y": 405,
+        "pressure": 0.66,
+        "timestamp_ms": 104040
+      },
+      {
+        "x": 544.1333,
+        "y": 405,
+        "pressure": 0.66,
+        "timestamp_ms": 104048
+      },
+      {
+        "x": 577.4667,
+        "y": 405,
+        "pressure": 0.66,
+        "timestamp_ms": 104056
+      },
+      {
+        "x": 610.8,
+        "y": 405,
+        "pressure": 0.66,
+        "timestamp_ms": 104064
+      },
+      {
+        "x": 644.1333,
+        "y": 405,
+        "pressure": 0.66,
+        "timestamp_ms": 104072
+      },
+      {
+        "x": 677.4667,
+        "y": 405,
+        "pressure": 0.66,
+        "timestamp_ms": 104080
+      },
+      {
+        "x": 710.8,
+        "y": 405,
+        "pressure": 0.66,
+        "timestamp_ms": 104088
+      },
+      {
+        "x": 744.1333,
+        "y": 405,
+        "pressure": 0.66,
+        "timestamp_ms": 104096
+      },
+      {
+        "x": 777.4667,
+        "y": 405,
+        "pressure": 0.66,
+        "timestamp_ms": 104104
+      },
+      {
+        "x": 810.8,
+        "y": 405,
+        "pressure": 0.66,
+        "timestamp_ms": 104112
+      }
+    ]
+  },
+  {
+    "id": "10404-axis-y",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 638.3,
+        "y": 280,
+        "pressure": 0.66,
+        "timestamp_ms": 105040
+      },
+      {
+        "x": 643.3,
+        "y": 307.77777,
+        "pressure": 0.66,
+        "timestamp_ms": 105048
+      },
+      {
+        "x": 648.3,
+        "y": 335.55554,
+        "pressure": 0.66,
+        "timestamp_ms": 105056
+      },
+      {
+        "x": 653.3,
+        "y": 363.33334,
+        "pressure": 0.66,
+        "timestamp_ms": 105064
+      },
+      {
+        "x": 658.3,
+        "y": 391.1111,
+        "pressure": 0.66,
+        "timestamp_ms": 105072
+      },
+      {
+        "x": 663.3,
+        "y": 418.88892,
+        "pressure": 0.66,
+        "timestamp_ms": 105080
+      },
+      {
+        "x": 668.3,
+        "y": 446.6667,
+        "pressure": 0.66,
+        "timestamp_ms": 105088
+      },
+      {
+        "x": 673.3,
+        "y": 474.44446,
+        "pressure": 0.66,
+        "timestamp_ms": 105096
+      },
+      {
+        "x": 678.3,
+        "y": 502.22223,
+        "pressure": 0.66,
+        "timestamp_ms": 105104
+      },
+      {
+        "x": 683.3,
+        "y": 530,
+        "pressure": 0.66,
+        "timestamp_ms": 105112
+      }
+    ]
+  },
+  {
+    "id": "10404-curve-0",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 500,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106040
+      },
+      {
+        "x": 509,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106048
+      },
+      {
+        "x": 518,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106056
+      },
+      {
+        "x": 527,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106064
+      },
+      {
+        "x": 536,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106072
+      },
+      {
+        "x": 545,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106080
+      },
+      {
+        "x": 554,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106088
+      },
+      {
+        "x": 563,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106096
+      },
+      {
+        "x": 572,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106104
+      },
+      {
+        "x": 581,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106112
+      },
+      {
+        "x": 590,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106120
+      },
+      {
+        "x": 599,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106128
+      },
+      {
+        "x": 608,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106136
+      },
+      {
+        "x": 617,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106144
+      },
+      {
+        "x": 626,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106152
+      },
+      {
+        "x": 635,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106160
+      },
+      {
+        "x": 644,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106168
+      },
+      {
+        "x": 653,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106176
+      },
+      {
+        "x": 662,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106184
+      },
+      {
+        "x": 671,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106192
+      },
+      {
+        "x": 680,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106200
+      },
+      {
+        "x": 689,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106208
+      },
+      {
+        "x": 698,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106216
+      },
+      {
+        "x": 707,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106224
+      },
+      {
+        "x": 716,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106232
+      },
+      {
+        "x": 725,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106240
+      },
+      {
+        "x": 734,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106248
+      },
+      {
+        "x": 743,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106256
+      },
+      {
+        "x": 752,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106264
+      },
+      {
+        "x": 761,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106272
+      },
+      {
+        "x": 770,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106280
+      },
+      {
+        "x": 779,
+        "y": 345,
+        "pressure": 0.66,
+        "timestamp_ms": 106288
+      }
+    ]
+  }
+]

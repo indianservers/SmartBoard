@@ -212,6 +212,11 @@ data class OfflineLatexPrediction(
     val latex: String,
     val confidence: Float,
     val tokenCount: Int,
+    /** Exact text decoded from the model vocabulary, before SMART Board normalization. */
+    val rawLatex: String = latex,
+    val preprocessingMillis: Long = 0L,
+    val inferenceMillis: Long = 0L,
+    val decodingMillis: Long = 0L,
 )
 
 internal object OfflineMathImagePreprocessor {
@@ -378,8 +383,12 @@ internal class TexTellerOnnxRuntime(private val pack: OfflineMathOcrModelPack) :
 
     fun recognize(bytes: ByteArray, maximumTokens: Int = 96): OfflineLatexPrediction {
         require(bytes.isNotEmpty()) { "The selected image is empty." }
-        val pixels = OnnxTensor.createTensor(environment, OfflineMathImagePreprocessor.tensor(bytes), longArrayOf(1, 1, 448, 448))
+        val preprocessingStarted = System.nanoTime()
+        val pixelBuffer = OfflineMathImagePreprocessor.tensor(bytes)
+        val preprocessingMillis = (System.nanoTime() - preprocessingStarted) / 1_000_000L
+        val pixels = OnnxTensor.createTensor(environment, pixelBuffer, longArrayOf(1, 1, 448, 448))
         pixels.use { input ->
+            val inferenceStarted = System.nanoTime()
             encoder.run(mapOf(encoder.inputNames.first() to input)).use { encoded ->
                 val hidden = encoded[0] as OnnxTensor
                 val ids = mutableListOf(2L)
@@ -403,13 +412,25 @@ internal class TexTellerOnnxRuntime(private val pack: OfflineMathOcrModelPack) :
                         }
                     }
                 }
-                val latex = normalizeTexTellerLatex(vocabulary.decode(ids.drop(1).map(Long::toInt)))
+                val inferenceMillis = (System.nanoTime() - inferenceStarted) / 1_000_000L
+                val decodingStarted = System.nanoTime()
+                val rawLatex = vocabulary.decode(ids.drop(1).map(Long::toInt))
+                val latex = normalizeTexTellerLatex(rawLatex)
                 require(latex.isNotBlank()) { "The formula model returned an empty expression." }
                 require(SafeLatexPreview.validate(latex).isSuccess) {
                     "The formula model returned malformed or unsupported notation."
                 }
                 val confidence = if (predicted == 0) .35f else exp(logProbability / predicted).toFloat().coerceIn(.35f, .995f)
-                return OfflineLatexPrediction(latex, confidence, predicted)
+                val decodingMillis = (System.nanoTime() - decodingStarted) / 1_000_000L
+                return OfflineLatexPrediction(
+                    latex = latex,
+                    confidence = confidence,
+                    tokenCount = predicted,
+                    rawLatex = rawLatex,
+                    preprocessingMillis = preprocessingMillis,
+                    inferenceMillis = inferenceMillis,
+                    decodingMillis = decodingMillis,
+                )
             }
         }
     }

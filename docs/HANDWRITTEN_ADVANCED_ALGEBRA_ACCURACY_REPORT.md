@@ -8,6 +8,10 @@ Recognition path: production multimodal engine with the cached offline TexTeller
 
 Corpus: all 75 equations in `codex-clipboard-662b2abb-26a1-4f59-918b-e552b3ebfd79.png`
 
+Execution: one uninterrupted Android instrumentation run of all 75 cases on the production recognition path
+
+Runtime: 400.613 seconds
+
 ## Result
 
 | Measure | Result |
@@ -18,7 +22,7 @@ Corpus: all 75 equations in `codex-clipboard-662b2abb-26a1-4f59-918b-e552b3ebfd7
 | Unresolved | 1/75 (1.3%) |
 | Recognition crashes | 0 |
 
-The full original run produced 69/75 exact primary and 71/75 exact top-eight recall. General fixes for the handwritten `8` glyph, `tan`/`ton` OCR confusion, malformed exponent ranking, and redundant outer power grouping were then verified on the affected cases, producing the final results above.
+This is the measured result of a fresh full-corpus rerun after the handwritten `8` glyph, `tan`/`ton` OCR confusion, malformed exponent ranking, and redundant outer power grouping fixes. All 75 recognitions completed in one run without a recognition or application crash.
 
 ## Expected versus detected
 

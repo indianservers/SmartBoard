@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "generated_cases": 560,
+  "executed_cases": 560,
+  "pass_count": 209,
+  "pass_rate": 0.3732142857142857,
+  "exact_match_rate": 0.3482142857142857,
+  "semantic_match_rate": 0.44285714285714284,
+  "average_symbol_score": 0.658289707215227,
+  "average_structure_score": 0.6291666666666664,
+  "average_spatial_score": 0.8114583333333334,
+  "crashes": 0,
+  "timeouts": 28,
+  "elapsed_ms": 2377461,
+  "device": {
+    "manufacturer": "Google",
+    "model": "sdk_gphone64_x86_64",
+    "android": "15",
+    "sdk": "35",
+    "abi": "x86_64|arm64-v8a",
+    "app_version": "1.0 (1)",
+    "recognition_model": "TexTeller-Q4-v2:READY",
+    "input_mode": "automated-stroke-replay",
+    "process_pss_start_kb": "75273",
+    "process_pss_peak_kb": "166377"
+  },
+  "category_counts": {
+    "BASIC_ARITHMETIC": 40,
+    "ALGEBRAIC_EXPRESSIONS": 40,
+    "EQUATIONS_INEQUALITIES": 40,
+    "POWERS_SUBSCRIPTS_ROOTS": 40,
+    "FRACTIONS_RATIONAL": 40,
+    "COMPLEX_NUMBERS": 40,
+    "LOG_EXP_SPECIAL": 40,
+    "TRIGONOMETRY": 40,
+    "CALCULUS": 40,
+    "MATRICES_VECTORS": 40,
+    "GRAPHS": 40,
+    "GEOMETRY_DIAGRAMS": 40,
+    "PROBABILITY_STATISTICS": 40,
+    "SETS_LOGIC": 40
+  }
+}

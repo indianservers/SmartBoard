@@ -1,0 +1,34 @@
+[
+  {
+    "id": "10478-polygon",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 1000,
+        "y": 280,
+        "pressure": 0.66,
+        "timestamp_ms": 104780
+      },
+      {
+        "x": 1000,
+        "y": 333.94,
+        "pressure": 0.66,
+        "timestamp_ms": 104788
+      },
+      {
+        "x": 1058.58,
+        "y": 333.94,
+        "pressure": 0.66,
+        "timestamp_ms": 104796
+      },
+      {
+        "x": 1000,
+        "y": 280,
+        "pressure": 0.66,
+        "timestamp_ms": 104804
+      }
+    ]
+  }
+]

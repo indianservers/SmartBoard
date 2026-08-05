@@ -1,0 +1,818 @@
+[
+  {
+    "id": "10474-box-0",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 500,
+        "y": 46,
+        "pressure": 0.66,
+        "timestamp_ms": 104740
+      },
+      {
+        "x": 508.33334,
+        "y": 46,
+        "pressure": 0.66,
+        "timestamp_ms": 104748
+      },
+      {
+        "x": 516.6667,
+        "y": 46,
+        "pressure": 0.66,
+        "timestamp_ms": 104756
+      },
+      {
+        "x": 525,
+        "y": 46,
+        "pressure": 0.66,
+        "timestamp_ms": 104764
+      },
+      {
+        "x": 533.3333,
+        "y": 46,
+        "pressure": 0.66,
+        "timestamp_ms": 104772
+      },
+      {
+        "x": 541.6667,
+        "y": 46,
+        "pressure": 0.66,
+        "timestamp_ms": 104780
+      },
+      {
+        "x": 550,
+        "y": 46,
+        "pressure": 0.66,
+        "timestamp_ms": 104788
+      },
+      {
+        "x": 558.3333,
+        "y": 46,
+        "pressure": 0.66,
+        "timestamp_ms": 104796
+      },
+      {
+        "x": 566.6667,
+        "y": 46,
+        "pressure": 0.66,
+        "timestamp_ms": 104804
+      },
+      {
+        "x": 575,
+        "y": 46,
+        "pressure": 0.66,
+        "timestamp_ms": 104812
+      }
+    ]
+  },
+  {
+    "id": "10474-box-1",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 528,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104750
+      },
+      {
+        "x": 536.3333,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104758
+      },
+      {
+        "x": 544.6667,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104766
+      },
+      {
+        "x": 553,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104774
+      },
+      {
+        "x": 561.3333,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104782
+      },
+      {
+        "x": 569.6667,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104790
+      },
+      {
+        "x": 578,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104798
+      },
+      {
+        "x": 586.3333,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104806
+      },
+      {
+        "x": 594.6667,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104814
+      },
+      {
+        "x": 603,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104822
+      }
+    ]
+  },
+  {
+    "id": "10474-box-2",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 500,
+        "y": 46,
+        "pressure": 0.66,
+        "timestamp_ms": 104760
+      },
+      {
+        "x": 503.1111,
+        "y": 43.555557,
+        "pressure": 0.66,
+        "timestamp_ms": 104768
+      },
+      {
+        "x": 506.22223,
+        "y": 41.11111,
+        "pressure": 0.66,
+        "timestamp_ms": 104776
+      },
+      {
+        "x": 509.33334,
+        "y": 38.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104784
+      },
+      {
+        "x": 512.44446,
+        "y": 36.22222,
+        "pressure": 0.66,
+        "timestamp_ms": 104792
+      },
+      {
+        "x": 515.55554,
+        "y": 33.77778,
+        "pressure": 0.66,
+        "timestamp_ms": 104800
+      },
+      {
+        "x": 518.6667,
+        "y": 31.333332,
+        "pressure": 0.66,
+        "timestamp_ms": 104808
+      },
+      {
+        "x": 521.7778,
+        "y": 28.88889,
+        "pressure": 0.66,
+        "timestamp_ms": 104816
+      },
+      {
+        "x": 524.8889,
+        "y": 26.444445,
+        "pressure": 0.66,
+        "timestamp_ms": 104824
+      },
+      {
+        "x": 528,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104832
+      }
+    ]
+  },
+  {
+    "id": "10474-box-3",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 575,
+        "y": 46,
+        "pressure": 0.66,
+        "timestamp_ms": 104770
+      },
+      {
+        "x": 575,
+        "y": 54.333332,
+        "pressure": 0.66,
+        "timestamp_ms": 104778
+      },
+      {
+        "x": 575,
+        "y": 62.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104786
+      },
+      {
+        "x": 575,
+        "y": 71,
+        "pressure": 0.66,
+        "timestamp_ms": 104794
+      },
+      {
+        "x": 575,
+        "y": 79.33333,
+        "pressure": 0.66,
+        "timestamp_ms": 104802
+      },
+      {
+        "x": 575,
+        "y": 87.66667,
+        "pressure": 0.66,
+        "timestamp_ms": 104810
+      },
+      {
+        "x": 575,
+        "y": 96,
+        "pressure": 0.66,
+        "timestamp_ms": 104818
+      },
+      {
+        "x": 575,
+        "y": 104.333336,
+        "pressure": 0.66,
+        "timestamp_ms": 104826
+      },
+      {
+        "x": 575,
+        "y": 112.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104834
+      },
+      {
+        "x": 575,
+        "y": 121,
+        "pressure": 0.66,
+        "timestamp_ms": 104842
+      }
+    ]
+  },
+  {
+    "id": "10474-box-4",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 603,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104780
+      },
+      {
+        "x": 603,
+        "y": 32.333332,
+        "pressure": 0.66,
+        "timestamp_ms": 104788
+      },
+      {
+        "x": 603,
+        "y": 40.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104796
+      },
+      {
+        "x": 603,
+        "y": 49,
+        "pressure": 0.66,
+        "timestamp_ms": 104804
+      },
+      {
+        "x": 603,
+        "y": 57.333332,
+        "pressure": 0.66,
+        "timestamp_ms": 104812
+      },
+      {
+        "x": 603,
+        "y": 65.66667,
+        "pressure": 0.66,
+        "timestamp_ms": 104820
+      },
+      {
+        "x": 603,
+        "y": 74,
+        "pressure": 0.66,
+        "timestamp_ms": 104828
+      },
+      {
+        "x": 603,
+        "y": 82.333336,
+        "pressure": 0.66,
+        "timestamp_ms": 104836
+      },
+      {
+        "x": 603,
+        "y": 90.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104844
+      },
+      {
+        "x": 603,
+        "y": 99,
+        "pressure": 0.66,
+        "timestamp_ms": 104852
+      }
+    ]
+  },
+  {
+    "id": "10474-box-5",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 575,
+        "y": 46,
+        "pressure": 0.66,
+        "timestamp_ms": 104790
+      },
+      {
+        "x": 578.1111,
+        "y": 43.555557,
+        "pressure": 0.66,
+        "timestamp_ms": 104798
+      },
+      {
+        "x": 581.2222,
+        "y": 41.11111,
+        "pressure": 0.66,
+        "timestamp_ms": 104806
+      },
+      {
+        "x": 584.3333,
+        "y": 38.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104814
+      },
+      {
+        "x": 587.44446,
+        "y": 36.22222,
+        "pressure": 0.66,
+        "timestamp_ms": 104822
+      },
+      {
+        "x": 590.55554,
+        "y": 33.77778,
+        "pressure": 0.66,
+        "timestamp_ms": 104830
+      },
+      {
+        "x": 593.6667,
+        "y": 31.333332,
+        "pressure": 0.66,
+        "timestamp_ms": 104838
+      },
+      {
+        "x": 596.7778,
+        "y": 28.88889,
+        "pressure": 0.66,
+        "timestamp_ms": 104846
+      },
+      {
+        "x": 599.8889,
+        "y": 26.444445,
+        "pressure": 0.66,
+        "timestamp_ms": 104854
+      },
+      {
+        "x": 603,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104862
+      }
+    ]
+  },
+  {
+    "id": "10474-box-6",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 575,
+        "y": 121,
+        "pressure": 0.66,
+        "timestamp_ms": 104800
+      },
+      {
+        "x": 566.6667,
+        "y": 121,
+        "pressure": 0.66,
+        "timestamp_ms": 104808
+      },
+      {
+        "x": 558.3333,
+        "y": 121,
+        "pressure": 0.66,
+        "timestamp_ms": 104816
+      },
+      {
+        "x": 550,
+        "y": 121,
+        "pressure": 0.66,
+        "timestamp_ms": 104824
+      },
+      {
+        "x": 541.6667,
+        "y": 121,
+        "pressure": 0.66,
+        "timestamp_ms": 104832
+      },
+      {
+        "x": 533.3333,
+        "y": 121,
+        "pressure": 0.66,
+        "timestamp_ms": 104840
+      },
+      {
+        "x": 525,
+        "y": 121,
+        "pressure": 0.66,
+        "timestamp_ms": 104848
+      },
+      {
+        "x": 516.6667,
+        "y": 121,
+        "pressure": 0.66,
+        "timestamp_ms": 104856
+      },
+      {
+        "x": 508.33334,
+        "y": 121,
+        "pressure": 0.66,
+        "timestamp_ms": 104864
+      },
+      {
+        "x": 500,
+        "y": 121,
+        "pressure": 0.66,
+        "timestamp_ms": 104872
+      }
+    ]
+  },
+  {
+    "id": "10474-box-7",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 603,
+        "y": 99,
+        "pressure": 0.66,
+        "timestamp_ms": 104810
+      },
+      {
+        "x": 594.6667,
+        "y": 99,
+        "pressure": 0.66,
+        "timestamp_ms": 104818
+      },
+      {
+        "x": 586.3333,
+        "y": 99,
+        "pressure": 0.66,
+        "timestamp_ms": 104826
+      },
+      {
+        "x": 578,
+        "y": 99,
+        "pressure": 0.66,
+        "timestamp_ms": 104834
+      },
+      {
+        "x": 569.6667,
+        "y": 99,
+        "pressure": 0.66,
+        "timestamp_ms": 104842
+      },
+      {
+        "x": 561.3333,
+        "y": 99,
+        "pressure": 0.66,
+        "timestamp_ms": 104850
+      },
+      {
+        "x": 553,
+        "y": 99,
+        "pressure": 0.66,
+        "timestamp_ms": 104858
+      },
+      {
+        "x": 544.6667,
+        "y": 99,
+        "pressure": 0.66,
+        "timestamp_ms": 104866
+      },
+      {
+        "x": 536.3333,
+        "y": 99,
+        "pressure": 0.66,
+        "timestamp_ms": 104874
+      },
+      {
+        "x": 528,
+        "y": 99,
+        "pressure": 0.66,
+        "timestamp_ms": 104882
+      }
+    ]
+  },
+  {
+    "id": "10474-box-8",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 575,
+        "y": 121,
+        "pressure": 0.66,
+        "timestamp_ms": 104820
+      },
+      {
+        "x": 578.1111,
+        "y": 118.55556,
+        "pressure": 0.66,
+        "timestamp_ms": 104828
+      },
+      {
+        "x": 581.2222,
+        "y": 116.111115,
+        "pressure": 0.66,
+        "timestamp_ms": 104836
+      },
+      {
+        "x": 584.3333,
+        "y": 113.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104844
+      },
+      {
+        "x": 587.44446,
+        "y": 111.22222,
+        "pressure": 0.66,
+        "timestamp_ms": 104852
+      },
+      {
+        "x": 590.55554,
+        "y": 108.77778,
+        "pressure": 0.66,
+        "timestamp_ms": 104860
+      },
+      {
+        "x": 593.6667,
+        "y": 106.333336,
+        "pressure": 0.66,
+        "timestamp_ms": 104868
+      },
+      {
+        "x": 596.7778,
+        "y": 103.888885,
+        "pressure": 0.66,
+        "timestamp_ms": 104876
+      },
+      {
+        "x": 599.8889,
+        "y": 101.44444,
+        "pressure": 0.66,
+        "timestamp_ms": 104884
+      },
+      {
+        "x": 603,
+        "y": 99,
+        "pressure": 0.66,
+        "timestamp_ms": 104892
+      }
+    ]
+  },
+  {
+    "id": "10474-box-9",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 500,
+        "y": 121,
+        "pressure": 0.66,
+        "timestamp_ms": 104830
+      },
+      {
+        "x": 500,
+        "y": 112.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104838
+      },
+      {
+        "x": 500,
+        "y": 104.333336,
+        "pressure": 0.66,
+        "timestamp_ms": 104846
+      },
+      {
+        "x": 500,
+        "y": 96,
+        "pressure": 0.66,
+        "timestamp_ms": 104854
+      },
+      {
+        "x": 500,
+        "y": 87.66667,
+        "pressure": 0.66,
+        "timestamp_ms": 104862
+      },
+      {
+        "x": 500,
+        "y": 79.33333,
+        "pressure": 0.66,
+        "timestamp_ms": 104870
+      },
+      {
+        "x": 500,
+        "y": 71,
+        "pressure": 0.66,
+        "timestamp_ms": 104878
+      },
+      {
+        "x": 500,
+        "y": 62.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104886
+      },
+      {
+        "x": 500,
+        "y": 54.333336,
+        "pressure": 0.66,
+        "timestamp_ms": 104894
+      },
+      {
+        "x": 500,
+        "y": 46,
+        "pressure": 0.66,
+        "timestamp_ms": 104902
+      }
+    ]
+  },
+  {
+    "id": "10474-box-10",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 528,
+        "y": 99,
+        "pressure": 0.66,
+        "timestamp_ms": 104840
+      },
+      {
+        "x": 528,
+        "y": 90.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104848
+      },
+      {
+        "x": 528,
+        "y": 82.333336,
+        "pressure": 0.66,
+        "timestamp_ms": 104856
+      },
+      {
+        "x": 528,
+        "y": 74,
+        "pressure": 0.66,
+        "timestamp_ms": 104864
+      },
+      {
+        "x": 528,
+        "y": 65.66667,
+        "pressure": 0.66,
+        "timestamp_ms": 104872
+      },
+      {
+        "x": 528,
+        "y": 57.333332,
+        "pressure": 0.66,
+        "timestamp_ms": 104880
+      },
+      {
+        "x": 528,
+        "y": 49,
+        "pressure": 0.66,
+        "timestamp_ms": 104888
+      },
+      {
+        "x": 528,
+        "y": 40.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104896
+      },
+      {
+        "x": 528,
+        "y": 32.333336,
+        "pressure": 0.66,
+        "timestamp_ms": 104904
+      },
+      {
+        "x": 528,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104912
+      }
+    ]
+  },
+  {
+    "id": "10474-box-11",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 500,
+        "y": 121,
+        "pressure": 0.66,
+        "timestamp_ms": 105350
+      },
+      {
+        "x": 503.1111,
+        "y": 118.55556,
+        "pressure": 0.66,
+        "timestamp_ms": 105358
+      },
+      {
+        "x": 506.22223,
+        "y": 116.111115,
+        "pressure": 0.66,
+        "timestamp_ms": 105366
+      },
+      {
+        "x": 509.33334,
+        "y": 113.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 105374
+      },
+      {
+        "x": 512.44446,
+        "y": 111.22222,
+        "pressure": 0.66,
+        "timestamp_ms": 105382
+      },
+      {
+        "x": 515.55554,
+        "y": 108.77778,
+        "pressure": 0.66,
+        "timestamp_ms": 105390
+      },
+      {
+        "x": 518.6667,
+        "y": 106.333336,
+        "pressure": 0.66,
+        "timestamp_ms": 105398
+      },
+      {
+        "x": 521.7778,
+        "y": 103.888885,
+        "pressure": 0.66,
+        "timestamp_ms": 105406
+      },
+      {
+        "x": 524.8889,
+        "y": 101.44444,
+        "pressure": 0.66,
+        "timestamp_ms": 105414
+      },
+      {
+        "x": 528,
+        "y": 99,
+        "pressure": 0.66,
+        "timestamp_ms": 105422
+      }
+    ]
+  }
+]

@@ -1,0 +1,546 @@
+[
+  {
+    "id": "10473-pyr-7",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 69,
+        "y": 84,
+        "pressure": 0.66,
+        "timestamp_ms": 104800
+      },
+      {
+        "x": 69,
+        "y": 77.33333,
+        "pressure": 0.66,
+        "timestamp_ms": 104808
+      },
+      {
+        "x": 69,
+        "y": 70.66667,
+        "pressure": 0.66,
+        "timestamp_ms": 104816
+      },
+      {
+        "x": 69,
+        "y": 64,
+        "pressure": 0.66,
+        "timestamp_ms": 104824
+      },
+      {
+        "x": 69,
+        "y": 57.333336,
+        "pressure": 0.66,
+        "timestamp_ms": 104832
+      },
+      {
+        "x": 69,
+        "y": 50.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104840
+      },
+      {
+        "x": 69,
+        "y": 44,
+        "pressure": 0.66,
+        "timestamp_ms": 104848
+      },
+      {
+        "x": 69,
+        "y": 37.333332,
+        "pressure": 0.66,
+        "timestamp_ms": 104856
+      },
+      {
+        "x": 69,
+        "y": 30.666668,
+        "pressure": 0.66,
+        "timestamp_ms": 104864
+      },
+      {
+        "x": 69,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104872
+      }
+    ]
+  },
+  {
+    "id": "10473-pyr-6",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 116,
+        "y": 104,
+        "pressure": 0.66,
+        "timestamp_ms": 104790
+      },
+      {
+        "x": 110.77778,
+        "y": 95.111115,
+        "pressure": 0.66,
+        "timestamp_ms": 104798
+      },
+      {
+        "x": 105.55556,
+        "y": 86.22222,
+        "pressure": 0.66,
+        "timestamp_ms": 104806
+      },
+      {
+        "x": 100.333336,
+        "y": 77.33333,
+        "pressure": 0.66,
+        "timestamp_ms": 104814
+      },
+      {
+        "x": 95.111115,
+        "y": 68.44444,
+        "pressure": 0.66,
+        "timestamp_ms": 104822
+      },
+      {
+        "x": 89.888885,
+        "y": 59.555553,
+        "pressure": 0.66,
+        "timestamp_ms": 104830
+      },
+      {
+        "x": 84.666664,
+        "y": 50.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104838
+      },
+      {
+        "x": 79.44444,
+        "y": 41.77778,
+        "pressure": 0.66,
+        "timestamp_ms": 104846
+      },
+      {
+        "x": 74.22222,
+        "y": 32.888885,
+        "pressure": 0.66,
+        "timestamp_ms": 104854
+      },
+      {
+        "x": 69,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104862
+      }
+    ]
+  },
+  {
+    "id": "10473-pyr-5",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 69,
+        "y": 128,
+        "pressure": 0.66,
+        "timestamp_ms": 104780
+      },
+      {
+        "x": 69,
+        "y": 116.44444,
+        "pressure": 0.66,
+        "timestamp_ms": 104788
+      },
+      {
+        "x": 69,
+        "y": 104.888885,
+        "pressure": 0.66,
+        "timestamp_ms": 104796
+      },
+      {
+        "x": 69,
+        "y": 93.33333,
+        "pressure": 0.66,
+        "timestamp_ms": 104804
+      },
+      {
+        "x": 69,
+        "y": 81.77778,
+        "pressure": 0.66,
+        "timestamp_ms": 104812
+      },
+      {
+        "x": 69,
+        "y": 70.22222,
+        "pressure": 0.66,
+        "timestamp_ms": 104820
+      },
+      {
+        "x": 69,
+        "y": 58.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104828
+      },
+      {
+        "x": 69,
+        "y": 47.111107,
+        "pressure": 0.66,
+        "timestamp_ms": 104836
+      },
+      {
+        "x": 69,
+        "y": 35.555557,
+        "pressure": 0.66,
+        "timestamp_ms": 104844
+      },
+      {
+        "x": 69,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104852
+      }
+    ]
+  },
+  {
+    "id": "10473-pyr-4",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 24,
+        "y": 104,
+        "pressure": 0.66,
+        "timestamp_ms": 104770
+      },
+      {
+        "x": 29,
+        "y": 95.111115,
+        "pressure": 0.66,
+        "timestamp_ms": 104778
+      },
+      {
+        "x": 34,
+        "y": 86.22222,
+        "pressure": 0.66,
+        "timestamp_ms": 104786
+      },
+      {
+        "x": 39,
+        "y": 77.33333,
+        "pressure": 0.66,
+        "timestamp_ms": 104794
+      },
+      {
+        "x": 44,
+        "y": 68.44444,
+        "pressure": 0.66,
+        "timestamp_ms": 104802
+      },
+      {
+        "x": 49,
+        "y": 59.555553,
+        "pressure": 0.66,
+        "timestamp_ms": 104810
+      },
+      {
+        "x": 54,
+        "y": 50.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104818
+      },
+      {
+        "x": 59,
+        "y": 41.77778,
+        "pressure": 0.66,
+        "timestamp_ms": 104826
+      },
+      {
+        "x": 64,
+        "y": 32.888885,
+        "pressure": 0.66,
+        "timestamp_ms": 104834
+      },
+      {
+        "x": 69,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104842
+      }
+    ]
+  },
+  {
+    "id": "10473-pyr-3",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 69,
+        "y": 84,
+        "pressure": 0.66,
+        "timestamp_ms": 104760
+      },
+      {
+        "x": 64,
+        "y": 86.22222,
+        "pressure": 0.66,
+        "timestamp_ms": 104768
+      },
+      {
+        "x": 59,
+        "y": 88.44444,
+        "pressure": 0.66,
+        "timestamp_ms": 104776
+      },
+      {
+        "x": 54,
+        "y": 90.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104784
+      },
+      {
+        "x": 49,
+        "y": 92.888885,
+        "pressure": 0.66,
+        "timestamp_ms": 104792
+      },
+      {
+        "x": 44,
+        "y": 95.111115,
+        "pressure": 0.66,
+        "timestamp_ms": 104800
+      },
+      {
+        "x": 39,
+        "y": 97.333336,
+        "pressure": 0.66,
+        "timestamp_ms": 104808
+      },
+      {
+        "x": 34,
+        "y": 99.55556,
+        "pressure": 0.66,
+        "timestamp_ms": 104816
+      },
+      {
+        "x": 29,
+        "y": 101.77778,
+        "pressure": 0.66,
+        "timestamp_ms": 104824
+      },
+      {
+        "x": 24,
+        "y": 104,
+        "pressure": 0.66,
+        "timestamp_ms": 104832
+      }
+    ]
+  },
+  {
+    "id": "10473-pyr-2",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 116,
+        "y": 104,
+        "pressure": 0.66,
+        "timestamp_ms": 104750
+      },
+      {
+        "x": 110.77778,
+        "y": 101.77778,
+        "pressure": 0.66,
+        "timestamp_ms": 104758
+      },
+      {
+        "x": 105.55556,
+        "y": 99.55556,
+        "pressure": 0.66,
+        "timestamp_ms": 104766
+      },
+      {
+        "x": 100.333336,
+        "y": 97.333336,
+        "pressure": 0.66,
+        "timestamp_ms": 104774
+      },
+      {
+        "x": 95.111115,
+        "y": 95.111115,
+        "pressure": 0.66,
+        "timestamp_ms": 104782
+      },
+      {
+        "x": 89.888885,
+        "y": 92.888885,
+        "pressure": 0.66,
+        "timestamp_ms": 104790
+      },
+      {
+        "x": 84.666664,
+        "y": 90.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104798
+      },
+      {
+        "x": 79.44444,
+        "y": 88.44444,
+        "pressure": 0.66,
+        "timestamp_ms": 104806
+      },
+      {
+        "x": 74.22222,
+        "y": 86.22222,
+        "pressure": 0.66,
+        "timestamp_ms": 104814
+      },
+      {
+        "x": 69,
+        "y": 84,
+        "pressure": 0.66,
+        "timestamp_ms": 104822
+      }
+    ]
+  },
+  {
+    "id": "10473-pyr-1",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 69,
+        "y": 128,
+        "pressure": 0.66,
+        "timestamp_ms": 104740
+      },
+      {
+        "x": 74.22222,
+        "y": 125.333336,
+        "pressure": 0.66,
+        "timestamp_ms": 104748
+      },
+      {
+        "x": 79.44444,
+        "y": 122.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104756
+      },
+      {
+        "x": 84.666664,
+        "y": 120,
+        "pressure": 0.66,
+        "timestamp_ms": 104764
+      },
+      {
+        "x": 89.888885,
+        "y": 117.333336,
+        "pressure": 0.66,
+        "timestamp_ms": 104772
+      },
+      {
+        "x": 95.111115,
+        "y": 114.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104780
+      },
+      {
+        "x": 100.333336,
+        "y": 112,
+        "pressure": 0.66,
+        "timestamp_ms": 104788
+      },
+      {
+        "x": 105.55556,
+        "y": 109.33333,
+        "pressure": 0.66,
+        "timestamp_ms": 104796
+      },
+      {
+        "x": 110.77778,
+        "y": 106.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104804
+      },
+      {
+        "x": 116,
+        "y": 104,
+        "pressure": 0.66,
+        "timestamp_ms": 104812
+      }
+    ]
+  },
+  {
+    "id": "10473-pyr-0",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 24,
+        "y": 104,
+        "pressure": 0.66,
+        "timestamp_ms": 104730
+      },
+      {
+        "x": 29,
+        "y": 106.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104738
+      },
+      {
+        "x": 34,
+        "y": 109.333336,
+        "pressure": 0.66,
+        "timestamp_ms": 104746
+      },
+      {
+        "x": 39,
+        "y": 112,
+        "pressure": 0.66,
+        "timestamp_ms": 104754
+      },
+      {
+        "x": 44,
+        "y": 114.666664,
+        "pressure": 0.66,
+        "timestamp_ms": 104762
+      },
+      {
+        "x": 49,
+        "y": 117.333336,
+        "pressure": 0.66,
+        "timestamp_ms": 104770
+      },
+      {
+        "x": 54,
+        "y": 120,
+        "pressure": 0.66,
+        "timestamp_ms": 104778
+      },
+      {
+        "x": 59,
+        "y": 122.66667,
+        "pressure": 0.66,
+        "timestamp_ms": 104786
+      },
+      {
+        "x": 64,
+        "y": 125.333336,
+        "pressure": 0.66,
+        "timestamp_ms": 104794
+      },
+      {
+        "x": 69,
+        "y": 128,
+        "pressure": 0.66,
+        "timestamp_ms": 104802
+      }
+    ]
+  }
+]

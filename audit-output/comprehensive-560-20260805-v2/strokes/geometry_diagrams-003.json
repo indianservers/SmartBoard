@@ -1,0 +1,70 @@
+[
+  {
+    "id": "10442-line",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 1000,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104920
+      },
+      {
+        "x": 1006.76666,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104928
+      },
+      {
+        "x": 1013.5333,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104936
+      },
+      {
+        "x": 1020.3,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104944
+      },
+      {
+        "x": 1027.0667,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104952
+      },
+      {
+        "x": 1033.8334,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104960
+      },
+      {
+        "x": 1040.6,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104968
+      },
+      {
+        "x": 1047.3667,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104976
+      },
+      {
+        "x": 1054.1333,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104984
+      },
+      {
+        "x": 1060.9,
+        "y": 24,
+        "pressure": 0.66,
+        "timestamp_ms": 104992
+      }
+    ]
+  }
+]

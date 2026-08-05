@@ -1,0 +1,132 @@
+[
+  {
+    "id": "10454-polygon",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 76,
+        "y": 280,
+        "pressure": 0.66,
+        "timestamp_ms": 104540
+      },
+      {
+        "x": 112.769554,
+        "y": 295.23044,
+        "pressure": 0.66,
+        "timestamp_ms": 104548
+      },
+      {
+        "x": 128,
+        "y": 332,
+        "pressure": 0.66,
+        "timestamp_ms": 104556
+      },
+      {
+        "x": 112.769554,
+        "y": 368.76956,
+        "pressure": 0.66,
+        "timestamp_ms": 104564
+      },
+      {
+        "x": 76,
+        "y": 384,
+        "pressure": 0.66,
+        "timestamp_ms": 104572
+      },
+      {
+        "x": 39.230446,
+        "y": 368.76956,
+        "pressure": 0.66,
+        "timestamp_ms": 104580
+      },
+      {
+        "x": 24,
+        "y": 332,
+        "pressure": 0.66,
+        "timestamp_ms": 104588
+      },
+      {
+        "x": 39.230446,
+        "y": 295.23044,
+        "pressure": 0.66,
+        "timestamp_ms": 104596
+      },
+      {
+        "x": 76,
+        "y": 280,
+        "pressure": 0.66,
+        "timestamp_ms": 104604
+      }
+    ]
+  },
+  {
+    "id": "correction",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 50,
+        "y": 306,
+        "pressure": 0.66,
+        "timestamp_ms": 990000
+      },
+      {
+        "x": 51.964443,
+        "y": 314.66666,
+        "pressure": 0.66,
+        "timestamp_ms": 990008
+      },
+      {
+        "x": 53.92889,
+        "y": 323.33334,
+        "pressure": 0.66,
+        "timestamp_ms": 990016
+      },
+      {
+        "x": 55.893333,
+        "y": 332,
+        "pressure": 0.66,
+        "timestamp_ms": 990024
+      },
+      {
+        "x": 57.857777,
+        "y": 340.6667,
+        "pressure": 0.66,
+        "timestamp_ms": 990032
+      },
+      {
+        "x": 59.822224,
+        "y": 349.33334,
+        "pressure": 0.66,
+        "timestamp_ms": 990040
+      },
+      {
+        "x": 61.786667,
+        "y": 358,
+        "pressure": 0.66,
+        "timestamp_ms": 990048
+      },
+      {
+        "x": 63.751114,
+        "y": 366.6667,
+        "pressure": 0.66,
+        "timestamp_ms": 990056
+      },
+      {
+        "x": 65.71556,
+        "y": 375.33334,
+        "pressure": 0.66,
+        "timestamp_ms": 990064
+      },
+      {
+        "x": 67.68,
+        "y": 384,
+        "pressure": 0.66,
+        "timestamp_ms": 990072
+      }
+    ]
+  }
+]

@@ -1,0 +1,64 @@
+[
+  {
+    "id": "10459-polygon",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 1052,
+        "y": 580,
+        "pressure": 0.66,
+        "timestamp_ms": 104590
+      },
+      {
+        "x": 1088.7695,
+        "y": 595.23047,
+        "pressure": 0.66,
+        "timestamp_ms": 104598
+      },
+      {
+        "x": 1104,
+        "y": 632,
+        "pressure": 0.66,
+        "timestamp_ms": 104606
+      },
+      {
+        "x": 1088.7695,
+        "y": 668.76953,
+        "pressure": 0.66,
+        "timestamp_ms": 104614
+      },
+      {
+        "x": 1052,
+        "y": 684,
+        "pressure": 0.66,
+        "timestamp_ms": 104622
+      },
+      {
+        "x": 1015.23047,
+        "y": 668.76953,
+        "pressure": 0.66,
+        "timestamp_ms": 104630
+      },
+      {
+        "x": 1000,
+        "y": 632,
+        "pressure": 0.66,
+        "timestamp_ms": 104638
+      },
+      {
+        "x": 1015.23047,
+        "y": 595.23047,
+        "pressure": 0.66,
+        "timestamp_ms": 104646
+      },
+      {
+        "x": 1052,
+        "y": 580,
+        "pressure": 0.66,
+        "timestamp_ms": 104654
+      }
+    ]
+  }
+]

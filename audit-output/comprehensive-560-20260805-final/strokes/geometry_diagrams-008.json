@@ -1,0 +1,40 @@
+[
+  {
+    "id": "10447-polygon",
+    "width": 3.2,
+    "opacity": 1,
+    "color": 4279308561,
+    "points": [
+      {
+        "x": 500,
+        "y": 580,
+        "pressure": 0.66,
+        "timestamp_ms": 104470
+      },
+      {
+        "x": 603,
+        "y": 585,
+        "pressure": 0.66,
+        "timestamp_ms": 104478
+      },
+      {
+        "x": 590,
+        "y": 665,
+        "pressure": 0.66,
+        "timestamp_ms": 104486
+      },
+      {
+        "x": 505,
+        "y": 670,
+        "pressure": 0.66,
+        "timestamp_ms": 104494
+      },
+      {
+        "x": 500,
+        "y": 580,
+        "pressure": 0.66,
+        "timestamp_ms": 104502
+      }
+    ]
+  }
+]

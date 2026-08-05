@@ -6,9 +6,60 @@ Implementation status:
 
 - Existing-pipeline audit: **IMPLEMENTED**
 - Provider-neutral contracts: **IMPLEMENTED**
-- Production TexTeller wrapper migration: **NOT IMPLEMENTED**
-- Specialist model: **BLOCKED** pending licence and conversion validation
+- Production TexTeller wrapper migration: **IMPLEMENTED, SHADOW ONLY**
+- PosFormer specialist: **IMPLEMENTED, EDUCATION-ONLY SHADOW PROVIDER**
 - Production routing or scoring changes: **NOT IMPLEMENTED**
+
+## 2026-08-05 education-only implementation update
+
+This update supersedes the earlier PosFormer licensing/conversion planning notes later in this
+document. The product owner confirmed that this deployment is for education only. PosFormer
+therefore remains restricted to education and academic research, and that restriction is exposed
+in model-pack status, provider warnings and export metadata. It must not be enabled in a commercial
+distribution without separate permission.
+
+Implemented:
+
+- `TexTellerRecognitionProvider`: long-lived serialized encoder/decoder sessions, warm-up/release,
+  cancellation/deadline checks, exact raw output, normalized output and stage timing.
+- `PosFormerRecognitionProvider`: optional integrity-checked academic model pack and ONNX Runtime
+  Android execution.
+- `tools/posformer/export_posformer_onnx.py`: reproducible export from the official epoch-206
+  checkpoint into separate encoder and autoregressive decoder graphs.
+- ONNX-safe eval-mode masked BatchNorm replacement, equivalent on valid pixels.
+- Exact model sizes and SHA-256 hashes recorded in generated metadata.
+- Emulator smoke test using separate human-style canvas strokes for `x^{2}+1`.
+
+Measured PosFormer artifacts:
+
+| Artifact | Size |
+|---|---:|
+| Official PyTorch checkpoint | 78,508,976 bytes |
+| FP32 ONNX encoder | 12,671,986 bytes |
+| FP32 ONNX decoder | 13,674,143 bytes |
+| Vocabulary | 478 bytes |
+| Android specialist pack total | 26,346,607 bytes |
+
+Both ONNX graphs pass ONNX checker and desktop ONNX Runtime execution. On Android emulator
+`emulator-5554`, the stroke-drawn smoke case produced:
+
+| Expected | Detected | Confidence | Provider time | Assessment |
+|---|---|---:|---:|---|
+| `x^{2}+1` | `x ^ { 2 } \neq q` | 0.890 | 569 ms | Superscript correct; trailing `+1` incorrect |
+
+The initial test exposed an input-polarity mismatch: official CROHME images use black backgrounds
+with white ink, while SMART Board renders black ink on white. Before correction, the same input
+produced an unrelated limit expression at 0.333 confidence in 2,366 ms. PosFormer preprocessing now
+inverts board luminance to the official tensor convention.
+
+Current safety boundary:
+
+- PosFormer and the new TexTeller provider remain outside production routing.
+- All ensemble feature flags still default off.
+- Existing recognition output, documents, graph routing and geometry routing are unchanged.
+- PosFormer currently uses deterministic left-to-right greedy decoding. Official bidirectional
+  beam-10 parity plus a 200-fixture PyTorch-vs-ONNX comparison are required before its hypothesis
+  may influence the primary result.
 
 ## Baseline evidence reviewed
 
